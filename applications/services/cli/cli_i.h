@@ -74,7 +74,7 @@ void cli_plugin_wrapper(const char* name, Cli* cli, FuriString* args, void* cont
 #define CLI_PLUGIN_API_VERSION 1
 #define CLI_PLUGIN_WRAPPER(plugin_name_without_cli_suffix, cli_command_callback)         \
     void cli_command_callback##_wrapper(Cli* cli, FuriString* args, void* context) {     \
-        cli_plugin_wrapper(plugin_name_without_cli_suffix, cli, args, context);          \
+        cli_plugin_wrapper(plugin_name_without_cli_suffix "_cli", cli, args, context);   \
     }                                                                                    \
     static const FlipperAppPluginDescriptor cli_command_callback##_plugin_descriptor = { \
         .appid = CLI_PLUGIN_APP_ID,                                                      \

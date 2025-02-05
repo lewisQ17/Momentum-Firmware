@@ -5,9 +5,7 @@
 #include <furi_hal_version.h>
 #include <loader/loader.h>
 
-#include <flipper_application/plugins/plugin_manager.h>
-#include <loader/firmware_api/firmware_api.h>
-#include <inttypes.h>
+#include <lib/toolbox/load_plugin.h>
 #include <stdlib.h>
 
 #define TAG "CliSrv"
@@ -629,20 +627,12 @@ int32_t cli_srv(void* p) {
 }
 
 void cli_plugin_wrapper(const char* name, Cli* cli, FuriString* args, void* context) {
-    PluginManager* manager =
-        plugin_manager_alloc(CLI_PLUGIN_APP_ID, CLI_PLUGIN_API_VERSION, firmware_api_interface);
-    FuriString* path =
-        furi_string_alloc_printf(EXT_PATH("apps_data/cli/plugins/%s_cli.fal"), name);
-    PluginManagerError error = plugin_manager_load_single(manager, furi_string_get_cstr(path));
-    if(error == PluginManagerErrorNone) {
-        const CliCallback handler = plugin_manager_get_ep(manager, 0);
+    CliCallback handler = NULL;
+    PluginManager* manager = NULL;
+    if(load_plugin(CLI_PLUGIN_APP_ID, CLI_PLUGIN_API_VERSION, name, &handler, &manager)) {
         handler(cli, args, context);
+        plugin_manager_free(manager);
     } else {
-        printf(
-            "CLI plugin '%s' failed (code %" PRIu16 "), reinstall firmware or check logs\r\n",
-            name,
-            error);
+        printf("CLI plugin '%s' load failed, reinstall firmware or check logs\r\n", name);
     }
-    furi_string_free(path);
-    plugin_manager_free(manager);
 }

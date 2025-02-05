@@ -1,14 +1,15 @@
 #pragma once
 
 #include <furi_hal.h>
-#include <flipper_application/flipper_application.h>
+#include <flipper_application/plugins/plugin_manager.h>
 
 #define RX_BUF_SIZE 1024
 
 typedef struct SubGhzGPS SubGhzGPS;
 
 struct SubGhzGPS {
-    FlipperApplication* plugin_app;
+    PluginManager* plugin_manager;
+
     FuriThread* thread;
     FuriStreamBuffer* rx_stream;
     uint8_t rx_buf[RX_BUF_SIZE];
