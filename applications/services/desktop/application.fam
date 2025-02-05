@@ -15,3 +15,11 @@ App(
     stack_size=2 * 1024,
     order=60,
 )
+
+App(
+    appid="desktop_settings_migrate",
+    apptype=FlipperAppType.PLUGIN,
+    entry_point="desktop_settings_migrate_ep",
+    requires=["desktop"],
+    sources=["desktop_settings_migrate.c"],
+)
