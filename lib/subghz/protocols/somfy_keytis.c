@@ -132,14 +132,21 @@ static bool
     instance->generic.cnt = (data >> 24) & 0xFFFF;
     instance->generic.serial = data & 0xFFFFFF;
 
-    if(instance->generic.cnt < 0xFFFF) {
+    // Check for OFEX (overflow experimental) mode
+    if(furi_hal_subghz_get_rolling_counter_mult() != -0x7FFFFFFF) {
         if((instance->generic.cnt + furi_hal_subghz_get_rolling_counter_mult()) > 0xFFFF) {
             instance->generic.cnt = 0;
         } else {
             instance->generic.cnt += furi_hal_subghz_get_rolling_counter_mult();
         }
-    } else if(instance->generic.cnt >= 0xFFFF) {
-        instance->generic.cnt = 0;
+    } else {
+        if((instance->generic.cnt + 0x1) > 0xFFFF) {
+            instance->generic.cnt = 0;
+        } else if(instance->generic.cnt >= 0x1 && instance->generic.cnt != 0xFFFE) {
+            instance->generic.cnt = 0xFFFE;
+        } else {
+            instance->generic.cnt++;
+        }
     }
 
     uint8_t frame[10];
@@ -792,7 +799,7 @@ void subghz_protocol_decoder_somfy_keytis_get_string(void* context, FuriString* 
         "%s %db\r\n"
         "%lX%08lX%06lX\r\n"
         "Sn:0x%06lX \r\n"
-        "Cnt:0x%04lX\r\n"
+        "Cnt:%04lX\r\n"
         "Btn:%s\r\n",
 
         instance->generic.protocol_name,

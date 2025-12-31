@@ -140,11 +140,37 @@ static bool subghz_protocol_faac_slh_gen_data(SubGhzProtocolEncoderFaacSLH* inst
         uint8_t data_prg[8];
 
         data_prg[0] = 0x00;
+        // faac slh protocol have 20-bit counter so we take only 20 bits from mult (by AND 0xFFFFF)
 
         if(allow_zero_seed || (instance->generic.seed != 0x0)) {
-            instance->generic.cnt += furi_hal_subghz_get_rolling_counter_mult();
+            // check OFEX mode
+            if(furi_hal_subghz_get_rolling_counter_mult() != -0x7FFFFFFF) {
+                if((instance->generic.cnt +
+                    (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF)) > 0xFFFFF) {
+                    instance->generic.cnt = 0;
+                } else {
+                    instance->generic.cnt +=
+                        (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF);
+                }
+            } else {
+                // to do OFEX mode
+                instance->generic.cnt += 1;
+            }
+
             if(temp_counter_backup != 0x0) {
-                temp_counter_backup += furi_hal_subghz_get_rolling_counter_mult();
+                // check OFEX mode
+                if(furi_hal_subghz_get_rolling_counter_mult() != -0x7FFFFFFF) {
+                    if((temp_counter_backup +
+                        (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF)) > 0xFFFFF) {
+                        temp_counter_backup = 0;
+                    } else {
+                        temp_counter_backup +=
+                            (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF);
+                    }
+                } else {
+                    // todo OFEX mode
+                    temp_counter_backup += 1;
+                }
             }
         }
 
@@ -195,7 +221,9 @@ static bool subghz_protocol_faac_slh_gen_data(SubGhzProtocolEncoderFaacSLH* inst
        (temp_fix_backup != 0x0) && !faac_prog_mode) {
         instance->generic.serial = temp_fix_backup >> 4;
         instance->generic.btn = temp_fix_backup & 0xF;
-        instance->generic.cnt = temp_counter_backup;
+        if(temp_counter_backup != 0x0) {
+            instance->generic.cnt = temp_counter_backup;
+        }
     }
     uint32_t fix = instance->generic.serial << 4 | instance->generic.btn;
     uint32_t hop = 0;
@@ -208,8 +236,31 @@ static bool subghz_protocol_faac_slh_gen_data(SubGhzProtocolEncoderFaacSLH* inst
         fixx[i] = (fix >> (shiftby -= 4)) & 0xF;
     }
 
+    // faac slh protocol have 20-bit counter so we take only 20 bits from mult (by AND 0xFFFFF)
     if(allow_zero_seed || (instance->generic.seed != 0x0)) {
-        instance->generic.cnt += furi_hal_subghz_get_rolling_counter_mult();
+        // check OFEX mode
+        if(furi_hal_subghz_get_rolling_counter_mult() != -0x7FFFFFFF) {
+            if((instance->generic.cnt + (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF)) >
+               0xFFFFF) {
+                instance->generic.cnt = 0;
+            } else {
+                instance->generic.cnt += (furi_hal_subghz_get_rolling_counter_mult() & 0xFFFFF);
+            }
+
+        } else {
+            // OFEX mode
+            if(instance->generic.cnt < 0xFFFFF) {
+                if((instance->generic.cnt + 0xFFFFF) > 0xFFFFF) {
+                    instance->generic.cnt = 0;
+                } else {
+                    instance->generic.cnt += 0xFFFFF;
+                }
+            } else if(
+                (instance->generic.cnt >= 0xFFFFF) &&
+                (furi_hal_subghz_get_rolling_counter_mult() != 0)) {
+                instance->generic.cnt = 0;
+            }
+        }
     }
 
     if((instance->generic.cnt % 2) == 0) {
@@ -250,7 +301,7 @@ bool subghz_protocol_faac_slh_create_data(
     const char* manufacture_name,
     SubGhzRadioPreset* preset) {
     furi_assert(context);
-    // roguemaster don't steal!!!
+    // OwO
     SubGhzProtocolEncoderFaacSLH* instance = context;
     instance->generic.serial = serial;
     instance->generic.btn = btn;

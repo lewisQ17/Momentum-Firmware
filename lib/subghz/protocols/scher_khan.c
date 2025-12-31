@@ -77,7 +77,7 @@ const SubGhzProtocol subghz_protocol_scher_khan = {
     .decoder = &subghz_protocol_scher_khan_decoder,
     .encoder = &subghz_protocol_scher_khan_encoder,
 
-    .filter = SubGhzProtocolFilter_AutoAlarms,
+    .filter = SubGhzProtocolFilter_Cars,
 };
 
 void* subghz_protocol_decoder_scher_khan_alloc(SubGhzEnvironment* environment) {
@@ -254,13 +254,8 @@ static void subghz_protocol_scher_khan_check_remote_controller(
         instance->btn = 0;
         instance->cnt = 0;
         break;
-    case 81: //MAGIC CODE PRO / PRO2 Response ???
-        *protocol_name = "MAGIC CODE PRO,\n Response";
-        instance->serial = 0;
-        instance->btn = 0;
-        instance->cnt = 0;
-        break;
-    case 82: //MAGIC CODE PRO / PRO2 Response ???
+    case 81: // MAGIC CODE PRO / PRO2 Response ???
+    case 82: // MAGIC CODE PRO / PRO2 Response ???
         *protocol_name = "MAGIC CODE PRO,\n Response";
         instance->serial = 0;
         instance->btn = 0;
@@ -306,11 +301,13 @@ void subghz_protocol_decoder_scher_khan_get_string(void* context, FuriString* ou
     subghz_protocol_scher_khan_check_remote_controller(
         &instance->generic, &instance->protocol_name);
 
+    // use 'Cntr:' instead of 'Cnt:' to exclude this protocol counter from Counter edit
     furi_string_cat_printf(
         output,
         "%s %dbit\r\n"
         "Key:0x%lX%08lX\r\n"
-        "Sn:%07lX Btn:%X Cnt:%04lX\r\n"
+        "Sn:%07lX Btn:%X\r\n"
+        "Cntr:%04lX\r\n"
         "Pt: %s\r\n",
         instance->generic.protocol_name,
         instance->generic.data_count_bit,
