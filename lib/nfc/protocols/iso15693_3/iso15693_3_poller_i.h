@@ -14,14 +14,21 @@ extern "C" {
 
 typedef enum {
     Iso15693_3PollerStateIdle,
-    Iso15693_3PollerStateColResInProgress,
-    Iso15693_3PollerStateColResFailed,
-    Iso15693_3PollerStateActivated,
+    Iso15693_3PollerStateRequestMode,
+    Iso15693_3PollerStateActivate,
+    Iso15693_3PollerStateRead,
+    Iso15693_3PollerStateWrite,
+    Iso15693_3PollerStateFailed,
+    Iso15693_3PollerStateSuccess,
+
+    Iso15693_3PollerStateNum,
 } Iso15693_3PollerState;
 
 struct Iso15693_3Poller {
     Nfc* nfc;
     Iso15693_3PollerState state;
+    Iso15693_3PollerMode mode;
+    Iso15693_3Error error;
     Iso15693_3Data* data;
     BitBuffer* tx_buffer;
     BitBuffer* rx_buffer;

@@ -17,15 +17,49 @@ typedef struct Iso15693_3Poller Iso15693_3Poller;
  * @brief Enumeration of possible Iso15693_3 poller event types.
  */
 typedef enum {
-    Iso15693_3PollerEventTypeError, /**< An error occured during activation procedure. */
-    Iso15693_3PollerEventTypeReady, /**< The card was activated by the poller. */
+    Iso15693_3PollerEventTypeRequestMode, /**< Poller requests for operating mode. */
+    Iso15693_3PollerEventTypeReadSuccess, /**< The card was activated by the poller and maybe memory was read. */
+    Iso15693_3PollerEventTypeReadFailed, /**< An error occured during activation/reading procedure. */
+    Iso15693_3PollerEventTypeWriteSuccess, /**< The card was written to successfully. */
+    Iso15693_3PollerEventTypeWriteFailed, /**< An error occurred during writing to the card. */
 } Iso15693_3PollerEventType;
+
+// FIXME: update usages of these in firmware, re-evaluate if they should be kept or just break api
+
+/**
+  * @warning deprecated, use Iso15693_3PollerEventTypeReadFailed instead
+  */
+#define Iso15693_3PollerEventTypeError Iso15693_3PollerEventTypeReadFailed
+
+/**
+  * @warning deprecated, use Iso15693_3PollerEventTypeReadSuccess instead
+  */
+#define Iso15693_3PollerEventTypeReady Iso15693_3PollerEventTypeReadSuccess
+
+/**
+ * @brief Enumeration of possible Iso15693_3 poller operating modes.
+ */
+typedef enum {
+    Iso15693_3PollerModeRead, /**< Poller will only read card. It's a default mode. */
+    Iso15693_3PollerModeWrite, /**< Poller will write already saved card to another presented card. */
+} Iso15693_3PollerMode;
+
+/**
+ * @brief Iso15693_3 poller request mode event data.
+ *
+ * This instance of this structure must be filled on Iso15693_3PollerEventTypeRequestMode event.
+ */
+typedef struct {
+    Iso15693_3PollerMode mode; /**< Mode to be used by poller. */
+    const Iso15693_3Data* data; /**< Data to be used by poller. */
+} Iso15693_3PollerEventDataRequestMode;
 
 /**
  * @brief Iso15693_3 poller event data.
  */
 typedef union {
     Iso15693_3Error error; /**< Error code indicating card activation fail reason. */
+    Iso15693_3PollerEventDataRequestMode poller_mode; /**< Poller mode context. */
 } Iso15693_3PollerEventData;
 
 /**

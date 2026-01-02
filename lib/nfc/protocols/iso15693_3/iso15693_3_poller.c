@@ -6,6 +6,8 @@
 
 #define TAG "ISO15693_3Poller"
 
+typedef NfcCommand (*Iso15693_3PollerStateHandler)(Iso15693_3Poller* instance);
+
 const Iso15693_3Data* iso15693_3_poller_get_data(Iso15693_3Poller* instance) {
     furi_assert(instance);
     furi_assert(instance->data);
@@ -48,6 +50,59 @@ static void iso15693_3_poller_free(Iso15693_3Poller* instance) {
     free(instance);
 }
 
+static NfcCommand iso15693_3_poller_handler_idle(Iso15693_3Poller* instance) {
+    bit_buffer_reset(instance->tx_buffer);
+    bit_buffer_reset(instance->rx_buffer);
+
+    instance->state = Iso15693_3PollerStateRequestMode;
+    return NfcCommandContinue;
+}
+
+static NfcCommand iso15693_3_poller_handler_request_mode(Iso15693_3Poller* instance) {
+    NfcCommand command = NfcCommandContinue;
+
+    instance->iso15693_3_event.type = Iso15693_3PollerEventTypeRequestMode;
+    instance->iso15693_3_event.data->poller_mode.mode = Iso15693_3PollerModeRead;
+    instance->iso15693_3_event.data->poller_mode.data = NULL;
+
+    command = instance->callback(instance->general_event, instance->context);
+    instance->mode = instance->iso15693_3_event.data->poller_mode.mode;
+    if(instance->mode == Iso15693_3PollerModeWrite) {
+        iso15693_3_copy(instance->data, instance->iso15693_3_event.data->poller_mode.data);
+    }
+
+    instance->state = Iso15693_3PollerStateActivate;
+    return command;
+}
+
+static NfcCommand iso15693_3_poller_handler_failed(Iso15693_3Poller* instance) {
+    FURI_LOG_D(TAG, "Operation Failed");
+    instance->iso15693_3_event.type = instance->mode == Iso15693_3PollerModeRead ?
+                                          Iso15693_3PollerEventTypeReadFailed :
+                                          Iso15693_3PollerEventTypeWriteFailed;
+    instance->iso15693_3_event.data->error = instance->error;
+    NfcCommand command = instance->callback(instance->general_event, instance->context);
+    instance->state = Iso15693_3PollerStateIdle;
+    return command;
+}
+
+static NfcCommand iso15693_3_poller_handler_success(Iso15693_3Poller* instance) {
+    FURI_LOG_D(TAG, "Operation succeeded");
+    instance->iso15693_3_event.type = instance->mode == Iso15693_3PollerModeRead ?
+                                          Iso15693_3PollerEventTypeReadSuccess :
+                                          Iso15693_3PollerEventTypeWriteSuccess;
+    NfcCommand command = instance->callback(instance->general_event, instance->context);
+    return command;
+}
+
+static const Iso15693_3PollerStateHandler
+    iso15693_3_poller_read_handler[Iso15693_3PollerStateNum] = {
+        [Iso15693_3PollerStateIdle] = iso15693_3_poller_handler_idle,
+        [Iso15693_3PollerStateRequestMode] = iso15693_3_poller_handler_request_mode,
+        [Iso15693_3PollerStateFailed] = iso15693_3_poller_handler_failed,
+        [Iso15693_3PollerStateSuccess] = iso15693_3_poller_handler_success,
+};
+
 static void iso15693_3_poller_set_callback(
     Iso15693_3Poller* instance,
     NfcGenericCallback callback,
@@ -69,6 +124,9 @@ static NfcCommand iso15693_3_poller_run(NfcGenericEvent event, void* context) {
     NfcCommand command = NfcCommandContinue;
 
     if(nfc_event->type == NfcEventTypePollerReady) {
+        command = iso15693_3_poller_read_handler[instance->state](instance);
+
+        // FIXME: convert to new state machine
         if(instance->state != Iso15693_3PollerStateActivated) {
             Iso15693_3Error error = iso15693_3_poller_activate(instance, instance->data);
             if(error == Iso15693_3ErrorNone) {
@@ -87,6 +145,10 @@ static NfcCommand iso15693_3_poller_run(NfcGenericEvent event, void* context) {
             instance->iso15693_3_event_data.error = Iso15693_3ErrorNone;
             command = instance->callback(instance->general_event, instance->context);
         }
+    }
+
+    if(command == NfcCommandReset) {
+        instance->state = Iso15693_3PollerStateIdle;
     }
 
     return command;
