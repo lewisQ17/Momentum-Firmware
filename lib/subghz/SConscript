@@ -33,49 +33,7 @@ env.Append(
 libenv = env.Clone(FW_LIB_NAME="subghz")
 libenv.ApplyLibFlags()
 
-all_sources = libenv.GlobRecursive("*.c*")
-
-excluded_protocols = [
-    #
-    # Weather Station
-    "protocols/ws_generic.c",
-    "protocols/vauno_en8822c.c",
-    "protocols/emos_e601x.c",
-    "protocols/wendox_w6726.c",
-    "protocols/solight_te44.c",
-    "protocols/auriol_ahfl.c",
-    "protocols/auriol_hg0601a.c",
-    "protocols/kedsum_th.c",
-    "protocols/gt_wt_02.c",
-    "protocols/gt_wt_03.c",
-    "protocols/thermopro_tx4.c",
-    "protocols/infactory.c",
-    "protocols/nexus_th.c",
-    "protocols/tx_8300.c",
-    #
-    # Uncommon/Regional
-    "protocols/feron.c",
-    "protocols/elplast.c",
-    "protocols/hay21.c",
-    "protocols/doitrand.c",
-    "protocols/nero_radio.c",
-    "protocols/nero_sketch.c",
-    "protocols/pcsg_generic.c",
-    "protocols/power_smart.c",
-    "protocols/kinggates_stylo_4k.c",
-    "protocols/dickert_mahs.c",
-    "protocols/ansonic.c",
-    "protocols/dooya.c",
-    "protocols/ido.c",
-    "protocols/kia.c",
-    "protocols/smc5326.c",
-    "protocols/linear_delta3.c",
-    "protocols/schrader_gg4.c",
-    "protocols/tpms_generic.c",
-]
-
-excluded_protocols_full = [f"lib/subghz/{f}" for f in excluded_protocols]
-sources = [f for f in all_sources if str(f) not in excluded_protocols_full]
+sources = libenv.GlobRecursive("*.c*")
 
 lib = libenv.StaticLibrary("${FW_LIB_NAME}", sources)
 libenv.Install("${LIB_DIST_DIR}", lib)
