@@ -27,11 +27,9 @@
 #include "alutech_at_4n.h"
 #include "faac_slh.h"
 #include "phoenix_v2.h"
-#include "star_line.h"
-
+#include "beninca_arc.h"
 #include "gate_tx.h"
 #include "bett.h"
-#include "scher_khan.h"
 #include "gangqi.h"
 #include "roger.h"
 #include "revers_rb2.h"
@@ -53,7 +51,6 @@
 #include "nero_sketch.h"
 #include "nero_radio.h"
 #include "ido.h"
-#include "kia.h"
 #include "power_smart.h"
 #include "doitrand.h"
 #include "ansonic.h"
@@ -67,6 +64,7 @@
 #include "elplast.h"
 #include "schrader_gg4.h"
 #include "tpms_generic.h"
+#include "treadmill37.h"
 
 // Weather Station
 #include "oregon2.h"
