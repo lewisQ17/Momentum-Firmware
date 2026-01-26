@@ -1,5 +1,6 @@
 ### Added:
 - Apps:
+  - NFC: ISO 15693-3 NFC Writer (by @ch4istO)
   - Sub-GHz: ProtoPirate (by @RocketGod-git & @xMasterX & @zero-mega et al.)
 - Sub-GHz:
   - UL: Cardin S449 protocol full support (64bit keeloq) (with Add manually, and all button codes) (use FSK12K modulation to read the remote) (by @xMasterX & @zero-mega)
@@ -31,6 +32,7 @@
   - UL: Alutech AT-4N & Nice Flor S turbo speedup (by @Dmitry422)
   - UL: Sommer fm2 in Add manually now uses FM12K modulation (Sommer without fm2 tag uses FM476) (try this if regular option doesn't work for you) (by @xMasterX)
   - UL: Replaced Cars ignore option with Revers RB2 protocol ignore option (by @xMasterX)
+- Archive: Support opening and pinning ProtoPirate files from Archive (#510 by @LeeroysHub)
 
 ### Fixed:
 - Sub-GHz:
@@ -38,7 +40,11 @@
   - UL: Possible Sommer timings fix (by @xMasterX)
   - UL: Various fixes (by @xMasterX)
   - UL: Nice Flor S remove extra uint64 variable (by @xMasterX)
-- UL: NFC: Fix LED not blinking at SLIX unlock (by @xMasterX)
+- NFC:
+  - Fix sending 32+ byte ISO 15693-3 commands (by @WillyJL)
+  - Fixes to `READ_MULTI` and `GET_BLOCK_SECURITY` commands in ISO 15693-3 emulation (#501 by @WillyJL & aaronjamt)
+  - UL: Fix LED not blinking at SLIX unlock (by @xMasterX)
+- UL: UI: Some small changes (by @xMasterX)
 
 ### Removed:
 - Sub-GHz:
