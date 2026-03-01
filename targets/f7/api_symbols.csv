@@ -2079,7 +2079,7 @@ Function,+,gui_remove_view_port,void,"Gui*, ViewPort*"
 Function,+,gui_set_hide_statusbar,void,"Gui*, _Bool"
 Function,+,gui_set_lockdown,void,"Gui*, _Bool"
 Function,+,gui_set_lockdown_inhibit,void,"Gui*, _Bool"
-Function,-,gui_view_port_send_to_back,void,"Gui*, ViewPort*"
+Function,+,gui_view_port_send_to_back,void,"Gui*, ViewPort*"
 Function,+,gui_view_port_send_to_front,void,"Gui*, ViewPort*"
 Function,-,hci_send_req,int,"hci_request*, uint8_t"
 Function,+,hex_char_to_hex_nibble,_Bool,"char, uint8_t*"
@@ -3618,6 +3618,11 @@ Function,+,subghz_app,int32_t,char*
 Function,+,subghz_block_generic_deserialize,SubGhzProtocolStatus,"SubGhzBlockGeneric*, FlipperFormat*"
 Function,+,subghz_block_generic_deserialize_check_count_bit,SubGhzProtocolStatus,"SubGhzBlockGeneric*, FlipperFormat*, uint16_t"
 Function,+,subghz_block_generic_get_preset_name,void,"const char*, FuriString*"
+Function,+,subghz_block_generic_global_button_override_get,_Bool,uint8_t*
+Function,+,subghz_block_generic_global_button_override_set,void,uint8_t
+Function,+,subghz_block_generic_global_counter_override_get,_Bool,uint32_t*
+Function,+,subghz_block_generic_global_counter_override_set,void,uint32_t
+Function,+,subghz_block_generic_global_reset,void,void*
 Function,+,subghz_block_generic_serialize,SubGhzProtocolStatus,"SubGhzBlockGeneric*, FlipperFormat*, SubGhzRadioPreset*"
 Function,+,subghz_custom_btn_get,uint8_t,
 Function,+,subghz_custom_btn_get_original,uint8_t,
@@ -3687,6 +3692,7 @@ Function,+,subghz_keystore_raw_get_data,_Bool,"const char*, size_t, uint8_t*, si
 Function,+,subghz_keystore_reset_kl,void,SubGhzKeystore*
 Function,+,subghz_keystore_save,_Bool,"SubGhzKeystore*, const char*, uint8_t*"
 Function,+,subghz_protocol_alutech_at_4n_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
+Function,+,subghz_protocol_beninca_arc_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint32_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_blocks_add_bit,void,"SubGhzBlockDecoder*, uint8_t"
 Function,+,subghz_protocol_blocks_add_bytes,uint8_t,"const uint8_t[], size_t"
 Function,+,subghz_protocol_blocks_add_to_128_bit,void,"SubGhzBlockDecoder*, uint8_t, uint64_t*"
@@ -3723,14 +3729,18 @@ Function,+,subghz_protocol_decoder_raw_feed,void,"void*, _Bool, uint32_t"
 Function,+,subghz_protocol_decoder_raw_free,void,void*
 Function,+,subghz_protocol_decoder_raw_get_string,void,"void*, FuriString*"
 Function,+,subghz_protocol_decoder_raw_reset,void,void*
+Function,+,subghz_protocol_ditec_gol4_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_encoder_raw_alloc,void*,SubGhzEnvironment*
 Function,+,subghz_protocol_encoder_raw_deserialize,SubGhzProtocolStatus,"void*, FlipperFormat*"
 Function,+,subghz_protocol_encoder_raw_free,void,void*
 Function,+,subghz_protocol_encoder_raw_stop,void,void*
 Function,+,subghz_protocol_encoder_raw_yield,LevelDuration,void*
 Function,+,subghz_protocol_faac_slh_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint32_t, uint32_t, const char*, SubGhzRadioPreset*"
+Function,+,subghz_protocol_jarolift_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_keeloq_bft_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, uint32_t, const char*, SubGhzRadioPreset*"
 Function,+,subghz_protocol_keeloq_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, const char*, SubGhzRadioPreset*"
+Function,+,subghz_protocol_kinggates_stylo_4k_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
+Function,+,subghz_protocol_marantec_crc8,uint8_t,"uint8_t*, size_t"
 Function,+,subghz_protocol_nice_flor_s_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*, _Bool"
 Function,+,subghz_protocol_phoenix_v2_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint16_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_raw_file_encoder_worker_set_callback_end,void,"SubGhzProtocolEncoderRAW*, SubGhzProtocolEncoderRAWCallbackEnd, void*"
@@ -3746,7 +3756,6 @@ Function,+,subghz_protocol_secplus_v1_check_fixed,_Bool,uint32_t
 Function,+,subghz_protocol_secplus_v2_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint32_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_somfy_keytis_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
 Function,+,subghz_protocol_somfy_telis_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, SubGhzRadioPreset*"
-Function,+,subghz_protocol_star_line_create_data,_Bool,"void*, FlipperFormat*, uint32_t, uint8_t, uint16_t, const char*, SubGhzRadioPreset*"
 Function,+,subghz_receiver_alloc_init,SubGhzReceiver*,SubGhzEnvironment*
 Function,+,subghz_receiver_decode,void,"SubGhzReceiver*, _Bool, uint32_t"
 Function,+,subghz_receiver_free,void,SubGhzReceiver*
@@ -4315,6 +4324,7 @@ Variable,+,I_power_text_24x5,const Icon,
 Variable,+,I_prev_19x20,const Icon,
 Variable,+,I_prev_hover_19x20,const Icon,
 Variable,+,I_prev_text_19x5,const Icon,
+Variable,+,I_protopirate_10px,const Icon,
 Variable,-,I_qr_benchmark_25x25,const Icon,
 Variable,+,I_red_19x20,const Icon,
 Variable,+,I_red_hover_19x20,const Icon,
@@ -4643,7 +4653,9 @@ Variable,+,sequence_single_vibro,const NotificationSequence,
 Variable,+,sequence_solid_yellow,const NotificationSequence,
 Variable,+,sequence_success,const NotificationSequence,
 Variable,+,simple_array_config_uint8_t,const SimpleArrayConfig,
+Variable,+,subghz_block_generic_global,SubGhzBlockGenericGlobal,
 Variable,-,subghz_device_cc1101_int,const SubGhzDevice,
+Variable,+,subghz_device_cc1101_preset_2fsk_dev12khz_async_regs,const uint8_t[],
 Variable,+,subghz_device_cc1101_preset_2fsk_dev2_38khz_async_regs,const uint8_t[],
 Variable,+,subghz_device_cc1101_preset_2fsk_dev47_6khz_async_regs,const uint8_t[],
 Variable,+,subghz_device_cc1101_preset_gfsk_9_99kb_async_regs,const uint8_t[],
