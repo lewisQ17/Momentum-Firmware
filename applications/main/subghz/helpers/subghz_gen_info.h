@@ -10,6 +10,11 @@ typedef enum {
     GenKeeloqBFT,
     GenAlutechAt4n,
     GenSomfyTelis,
+    GenSomfyKeytis,
+    GenKingGatesStylo4k,
+    GenBenincaARC,
+    GenJarolift,
+    GenDitecGOL4,
     GenNiceFlorS,
     GenSecPlus1,
     GenSecPlus2,
@@ -65,6 +70,26 @@ typedef struct {
             uint32_t serial;
             uint8_t btn;
             uint16_t cnt;
+        } somfy_keytis;
+        struct {
+            uint32_t serial;
+            uint8_t btn;
+            uint16_t cnt;
+        } kinggates_stylo_4k;
+        struct {
+            uint32_t serial;
+            uint8_t btn;
+            uint32_t cnt;
+        } beninca_arc;
+        struct {
+            uint32_t serial;
+            uint8_t btn;
+            uint16_t cnt;
+        } jarolift;
+        struct {
+            uint32_t serial;
+            uint8_t btn;
+            uint16_t cnt;
             bool nice_one;
         } nice_flor_s;
         struct {
@@ -76,6 +101,11 @@ typedef struct {
             uint32_t serial;
             uint16_t cnt;
         } phoenix_v2;
+        struct {
+            uint32_t serial;
+            uint8_t btn;
+            uint16_t cnt;
+        } ditec_gol4;
     };
 } GenInfo;
 
