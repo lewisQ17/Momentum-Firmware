@@ -1,6 +1,7 @@
 ### Added:
 - Apps:
   - Games: Checkers (by @H4W9)
+  - GPIO: CAN Commander (by @MatthewKuKanich)
   - NFC:
     - ISO 15693-3 NFC Writer (by @ch4istO)
     - UL-C Bruteforce (by @noproto)
@@ -14,6 +15,7 @@
   - UL: Jarolift protocol full support (72bit dynamic) (with Add manually, and all button codes) (by @xMasterX & d82k & Steffen (bastelbudenbuben de))
   - UL: Treadmill37 protocol support (37bit static) (by @xMasterX)
   - UL: Ditec GOL4 protocol (with programming mode, button switch, add manually) (by @xMasterX & @zero-mega)
+  - UL: KeyFinder protocol (24bit static) (by @xMasterX & @mishamyte)
   - UL: New modulation FSK with 12KHz deviation (by @xMasterX)
   - UL: KingGates Stylo 4k Add manually and button switch support and refactoring of encoder (by @xMasterX)
   - UL: Stilmatic (R-Tech) 12bit discr. fix & button 9 support (two buttons hold simulation) (mapped on arrow keys) (by @xMasterX)
@@ -25,6 +27,8 @@
   - UL: TX Power setting (by @LeeroysHub)
   - UL: Somfy Keytis button switch and Add Manually support (by @xMasterX)
   - UL: Genius Echo/Bravo add 2 buttons hold simulation (0xB btn code) (by @xMasterX)
+- NFC: Add Mifare Ultralight C Write Support (#524 by @haw8411)
+- OFW: RFID: Add Indala 224-bit (long format) protocol support (by @kuzaxak)
 - UL: JS: Add IR capabilities to the JS engine (by @LuisMayo)
 - FBT: Allow apps to specify custom cflags (by @WillyJL)
 - UL: Docs: Add [full list of supported SubGHz protocols](https://github.com/Next-Flip/Momentum-Firmware/blob/dev/documentation/SubGHzSupportedSystems.md) and their frequencies/modulations that can be used for reading remotes (by @xMasterX)
@@ -39,14 +43,16 @@
   - FlipLibrary: Added Fahrenheit, current weather, and wind speed/direction (by @H4W9)
   - FlipSocial: Autocomplete, keyboard improvements, explore and profile view enhancements, bugfixes (by @jblanked)
   - FlipWeather: Added Fahrenheit, current weather, and wind speed/direction (by @H4W9)
+  - Free Roam: Minimap, code optimization, ux improvements (by @jblanked)
   - Flipper Blackhat: TUI command (by @o7-machinehum)
   - Geometry Dash: Major refactor, bugfixes and performance improvements, rename from Geometry Flip (by @gooseprjkt)
   - HC-SR04 Distance Sensor: Option to change measure units (by @Tyl3rA)
   - IconEdit: Save/Send animations, settings tab with canvas scale and cursor guides, bugfixes (by @rdefeo)
   - INA2xx INA Meter: Fixed application freezing when the sensor is not connected (by @cepetr)
+  - Lidar Emulator: Support external IR boards (by @ANTodorov)
   - NFC Login: Code refactor, bugfixes, renamed from NFC PC Login, restore BLE profile on app exit (by @Play2BReal)
-  - Picopass: Option to Create credential without a card (by @redteamlife)
-  - Seader: SAM ATR3 support, better IFSC/IFSD handling, various improvements (by @bettse)
+  - Picopass: Option to Create credential without a card (by @redteamlife), info screen improvements, allow Emulation of NRMAC dumped cards (by @bettse)
+  - Seader: SAM ATR3 support, better IFSC/IFSD handling, various improvements (by @bettse), reverse engineered U90 packet, memory optimization (by @cindersocket)
   - Seos Compatible: Seos write support, various improvements (by @aaronjamt), support switching key sets (by @pcunning), code refactoring, various bugfixes (by @bettse)
   - Sub-GHz Scheduler: Added new interval times, bugfixes and improvements (by @shalebridge)
   - Tetris: Various bugfixes (by @Bricktech2000)
@@ -64,6 +70,7 @@
   - UL: Signal Settings Improvements (by @Dmitry422)
   - UL: KeeLoq change delta size (by @xMasterX)
 - Archive: Support opening and pinning ProtoPirate files from Archive (#510 by @LeeroysHub)
+- OFW: RFID: Make FDX-B readout more descriptive (by @snowsign)
 - OFW: API: Make `view_port_send_to_back()` public (by @loftyinclination)
 
 ### Fixed:
