@@ -9,6 +9,7 @@
 * OFW PR 4362: NFC: Fix BusFault in Write to Initial Card (by @akrylysov)
 * Apps: Build tag (**27mar2026**) - **Check out more Apps updates and fixes by following** [this link](https://github.com/xMasterX/all-the-plugins/commits/dev)
 ## Other changes
+* OFW PR 4364: JS: Address utf8 support when uploading JavaScript application (by @bekindpleaserewind)
 * Display: Extend lcd contrast range to full ST756x 6-bit range (by @ShaTie) (reduced to -10 to +18 to avoid fully unreadable state)
 <br><br>
 #### Known NFC post-refactor regressions list: 
