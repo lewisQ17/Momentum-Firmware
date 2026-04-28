@@ -10,6 +10,8 @@
 struct HidPushToTalkMenu {
     View* view;
     Hid* hid;
+        PushToTalkMenuLongOkCallback long_ok_callback;
+        void* long_ok_callback_context;
 };
 
 typedef struct {
@@ -338,6 +340,39 @@ void ptt_menu_process_ok(HidPushToTalkMenu* hid_ptt_menu) {
     }
 }
 
+    void ptt_menu_process_long_ok(HidPushToTalkMenu* hid_ptt_menu) {
+        PushToTalkMenuList* list = NULL;
+        PushToTalkMenuItem* item = NULL;
+        with_view_model(
+            hid_ptt_menu->view,
+            HidPushToTalkMenuModel * model,
+            {
+                list = &model->lists[model->list_position];
+                const size_t items_size = PushToTalkMenuItemArray_size(list->items);
+                if(model->position < items_size) {
+                    item = PushToTalkMenuItemArray_get(list->items, model->position);
+                }
+            },
+            false);
+        if(item && list && hid_ptt_menu->long_ok_callback) {
+            hid_ptt_menu->long_ok_callback(
+                hid_ptt_menu->long_ok_callback_context,
+                list->index,
+                list->label,
+                item->index,
+                item->label);
+        }
+    }
+
+    void ptt_menu_set_long_ok_callback(
+        HidPushToTalkMenu* hid_ptt_menu,
+        PushToTalkMenuLongOkCallback callback,
+        void* callback_context) {
+        furi_assert(hid_ptt_menu);
+        hid_ptt_menu->long_ok_callback = callback;
+        hid_ptt_menu->long_ok_callback_context = callback_context;
+    }
+
 static bool hid_ptt_menu_input_callback(InputEvent* event, void* context) {
     furi_assert(context);
     HidPushToTalkMenu* hid_ptt_menu = context;
@@ -375,7 +410,10 @@ static bool hid_ptt_menu_input_callback(InputEvent* event, void* context) {
             consumed = true;
             ptt_menu_process_down(hid_ptt_menu);
         }
-    }
+        } else if(event->type == InputTypeLong && event->key == InputKeyOk) {
+            consumed = true;
+            ptt_menu_process_long_ok(hid_ptt_menu);
+        }
     return consumed;
 }
 
