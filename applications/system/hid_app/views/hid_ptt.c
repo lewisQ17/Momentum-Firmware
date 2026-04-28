@@ -445,8 +445,21 @@ static void hid_ptt_trigger_mute_linux_gather(HidPushToTalk* hid_ptt) {
                                 "2. Find the 'Mute/Unmute' shortcut and click 'Edit'.\n"
                                 "3. Press the Mute button in the app to bind it.\n"
                                 "4. Check global checkbox.\n"
-                                "5. Repeat for video and hand shortcuts.\n\n";
+                                "5. Repeat for video and hand shortcuts.\n"
+                                "6. Long-press < to send Enter key.\n\n";
             break;
+        case HidPushToTalkAppIndexZoom:
+            app_specific_help = "Zoom:\n"
+                                "1. Go to Settings > Keyboard Shortcuts.\n"
+                                "2. Find the 'Mute/Unmute' shortcut and click 'Edit'.\n"
+                                "3. Press the Mute button in the app to bind it.\n"
+                                "4. Repeat for video and hand shortcuts.\n"
+                                "5. Long-press < to send Enter key.\n\n";
+            break;
+        }
+        char* left_button_help = "";
+        if(appIndex == HidPushToTalkAppIndexZoom || appIndex == HidPushToTalkAppIndexZoomGlobal) {
+            left_button_help = "Long-press < sends Enter.\n";
         }
         FuriString* msg = furi_string_alloc();
         furi_string_cat_printf(
@@ -455,11 +468,13 @@ static void hid_ptt_trigger_mute_linux_gather(HidPushToTalk* hid_ptt) {
             "To operate properly flipper microphone "
             "status must be in sync with your computer.\n"
             "Hold > to change mic status.\n"
+            "%s"
             "Long-press OK in menu to open this help.\n"
             "Press BACK to switch mic on/off.\n"
             "Hold 'o' for PTT mode (mic will be off once you release 'o')\n"
             "Hold BACK to exit.",
-            app_specific_help);
+            app_specific_help,
+            left_button_help);
         widget_add_text_scroll_element(hid_ptt->help, 0, 0, 128, 64, furi_string_get_cstr(msg));
         furi_string_free(msg);
     }
@@ -949,6 +964,14 @@ static void hid_ptt_process(HidPushToTalk* hid_ptt, InputEvent* event) {
             } else if(event->type == InputTypeLong && event->key == InputKeyRight) {
                 model->muted = !model->muted;
                 notification_message(hid_ptt->hid->notifications, &sequence_single_vibro);
+            } else if(event->type == InputTypeLong && event->key == InputKeyLeft) {
+                if(
+                    model->appIndex == HidPushToTalkAppIndexZoom ||
+                    model->appIndex == HidPushToTalkAppIndexZoomGlobal) {
+                    hid_hal_keyboard_press(hid_ptt->hid, HID_KEYBOARD_RETURN);
+                    hid_hal_keyboard_release(hid_ptt->hid, HID_KEYBOARD_RETURN);
+                    notification_message(hid_ptt->hid->notifications, &sequence_single_vibro);
+                }
             }
             //LED
             if(!model->muted || (model->ptt_pressed)) {
