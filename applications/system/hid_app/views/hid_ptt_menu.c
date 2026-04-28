@@ -165,49 +165,43 @@ static void
 
             FuriString* disp_str;
             disp_str = furi_string_alloc_set(PushToTalkMenuItemArray_cref(it)->label);
-            size_t item_text_width = item_width - (6 * 2);
-            if((position == model->position) && model->hint_visible) {
-                // Reserve space for hint near selected item.
-                item_text_width = item_width / 2;
-            }
-            elements_string_fit_width(canvas, disp_str, item_text_width);
-
-            canvas_draw_str(
-                canvas,
-                6,
-                y_offset + (item_position * item_height) + item_height - 4,
-                furi_string_get_cstr(disp_str));
+            const int32_t text_y = y_offset + (item_position * item_height) + item_height - 4;
+            const int32_t row_left_x = 6;
+            const int32_t row_right_x = item_width - 2;
+            const size_t row_width = row_right_x - row_left_x;
 
             if((position == model->position) && model->hint_visible) {
-                const char* hint_prefix = "Long press";
+                const char* hint_prefix = " | Long press";
                 const char* hint_suffix = "for help";
-                const int32_t text_y = y_offset + (item_position * item_height) + item_height - 4;
                 const int32_t icon_y = text_y - 8;
-                const size_t selected_text_w = canvas_string_width(canvas, furi_string_get_cstr(disp_str));
-                const int32_t hint_start_x = 6 + selected_text_w + 3;
-                const int32_t row_right_x = item_width - 2;
 
-                if(hint_start_x < row_right_x) {
-                    const size_t prefix_w = canvas_string_width(canvas, hint_prefix);
-                    const size_t icon_w = 9;
-                    const size_t suffix_w = canvas_string_width(canvas, hint_suffix);
-                    const size_t hint_w = prefix_w + 2 + icon_w + 2 + suffix_w;
-                    const size_t available = row_right_x - hint_start_x;
+                const size_t label_w = canvas_string_width(canvas, furi_string_get_cstr(disp_str));
+                const size_t prefix_w = canvas_string_width(canvas, hint_prefix);
+                const size_t icon_w = 9;
+                const size_t suffix_w = canvas_string_width(canvas, hint_suffix);
 
-                    int32_t scroll_offset = 0;
-                    if(hint_w > available) {
-                        const size_t overflow = hint_w - available;
-                        const size_t cycle = overflow * 2;
-                        const size_t step = cycle ? (model->hint_scroll_tick % cycle) : 0;
-                        scroll_offset = (step <= overflow) ? step : (cycle - step);
-                    }
+                const size_t group_w = label_w + 2 + prefix_w + 2 + icon_w + 2 + suffix_w;
 
-                    const int32_t draw_x = hint_start_x - scroll_offset;
-                    canvas_draw_str(canvas, draw_x, text_y, hint_prefix);
-                    const int32_t icon_x = draw_x + prefix_w + 2;
-                    canvas_draw_icon(canvas, icon_x, icon_y, &I_Ok_btn_9x9);
-                    canvas_draw_str(canvas, icon_x + icon_w + 2, text_y, hint_suffix);
+                int32_t scroll_offset = 0;
+                if(group_w > row_width) {
+                    const size_t overflow = group_w - row_width;
+                    const size_t cycle = overflow * 2;
+                    const size_t step = cycle ? (model->hint_scroll_tick % cycle) : 0;
+                    scroll_offset = (step <= overflow) ? step : (cycle - step);
                 }
+
+                const int32_t draw_x = row_left_x - scroll_offset;
+                canvas_draw_str(canvas, draw_x, text_y, furi_string_get_cstr(disp_str));
+
+                int32_t hint_x = draw_x + label_w + 2;
+                canvas_draw_str(canvas, hint_x, text_y, hint_prefix);
+                hint_x += prefix_w + 2;
+                canvas_draw_icon(canvas, hint_x, icon_y, &I_Ok_btn_9x9);
+                hint_x += icon_w + 2;
+                canvas_draw_str(canvas, hint_x, text_y, hint_suffix);
+            } else {
+                elements_string_fit_width(canvas, disp_str, item_width - (6 * 2));
+                canvas_draw_str(canvas, row_left_x, text_y, furi_string_get_cstr(disp_str));
             }
 
             furi_string_free(disp_str);
