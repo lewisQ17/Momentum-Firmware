@@ -726,6 +726,7 @@ static void hid_ptt_draw_callback(Canvas* canvas, void* context) {
     HidPushToTalkModel* model = context;
 
     const uint8_t top_offset = 11;
+    const uint8_t status_bar_bottom_y = top_offset;
     const uint8_t helper_top_y = 92;
 
     const uint8_t x_1 = 0;
@@ -738,7 +739,7 @@ static void hid_ptt_draw_callback(Canvas* canvas, void* context) {
 
     const uint8_t controls_bottom_y = y_3 + 18;
     const uint8_t labels_center_y = (controls_bottom_y + helper_top_y) / 2;
-    const uint8_t app_label_y = labels_center_y - 5;
+    const uint8_t app_label_y = labels_center_y - 1;
     const uint8_t os_label_y = app_label_y + 11;
 
     // Header
@@ -810,7 +811,7 @@ static void hid_ptt_draw_callback(Canvas* canvas, void* context) {
 
     // Back / Mic
     const uint8_t x_mic = x_3;
-    const uint8_t y_mic = top_offset;
+    const uint8_t y_mic = status_bar_bottom_y + ((y_2 - status_bar_bottom_y - 16) / 2);
     canvas_draw_icon(canvas, x_mic, y_mic, &I_RoundButtonUnpressed_16x16);
 
     if(!(!model->muted || (model->ptt_pressed))) {
