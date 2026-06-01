@@ -11,10 +11,10 @@ App(
     sources=[
         "*.c",
         "!subghz_fap.c",
-        "!helpers/subghz_gps.c",
-        "!helpers/minmea.c",
+        "!subghz_gps.c",
+        "!minmea.c",
         "!subghz_cli.c",
-        "!helpers/subghz_chat.c",
+        "!subghz_chat.c",
         "!subghz_extended_freq.c",
         "!subghz_gen_info.c",
         "!subghz_txrx_create_protocol_key.c",
