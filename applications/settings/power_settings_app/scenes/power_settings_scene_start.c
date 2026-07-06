@@ -10,19 +10,8 @@ enum PowerSettingsSubmenuIndex {
 };
 
 #define AUTO_POWEROFF_DELAY_COUNT 12
-const char* const auto_poweroff_delay_text[AUTO_POWEROFF_DELAY_COUNT] = {
-    "5min",
-    "10min",
-    "15min",
-    "30min",
-    "45min",
-    "60min",
-    "90min",
-    "2h",
-    "6h",
-    "12h",
-    "24h",
-    "48h"};
+const char* const auto_poweroff_delay_text[AUTO_POWEROFF_DELAY_COUNT] =
+    {"5min", "10min", "15min", "30min", "45min", "60min", "90min", "2h", "6h", "12h", "24h", "48h"};
 
 const uint32_t auto_poweroff_delay_value[AUTO_POWEROFF_DELAY_COUNT] = {
     300000,
@@ -40,7 +29,7 @@ const uint32_t auto_poweroff_delay_value[AUTO_POWEROFF_DELAY_COUNT] = {
 
 #define AUTO_POWEROFF_PERCENT_STEP 5
 #define AUTO_POWEROFF_PERCENT_MAX  95
-#define CHARGE_SUPRESS_STEP 5
+#define CHARGE_SUPRESS_STEP        5
 
 static const char* const auto_poweroff_mode_text[3] = {
     "OFF",

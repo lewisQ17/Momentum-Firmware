@@ -39,7 +39,7 @@ void power_settings_load(PowerSettings* settings) {
                 POWER_SETTINGS_MAGIC,
                 POWER_SETTINGS_VER);
 
-        // v2 -> v3
+            // v2 -> v3
         } else if(version == POWER_SETTINGS_VER_2) {
             PowerSettingsV2* prev = malloc(sizeof(PowerSettingsV2));
             success = saved_struct_load(
@@ -59,7 +59,7 @@ void power_settings_load(PowerSettings* settings) {
             }
             free(prev);
 
-        // v1 -> v3
+            // v1 -> v3
         } else if(version == POWER_SETTINGS_VER_1) {
             PowerSettingsV1* prev = malloc(sizeof(PowerSettingsV1));
             success = saved_struct_load(

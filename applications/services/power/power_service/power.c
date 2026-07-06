@@ -610,9 +610,6 @@ static void power_message_callback(FuriEventLoopObject* object, void* context) {
         power->auto_poweroff_warning = false;
         power_settings_apply(power);
         break;
-    case PowerMessageTypeTestWarning:
-        power_handle_test_warning(power);
-        break;
     default:
         furi_crash();
     }
