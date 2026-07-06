@@ -489,6 +489,7 @@ static void power_auto_poweroff_timer_callback(void* context) {
 
 //start|restart timer and events subscription and callbacks for input events (we restart timer when user press keys)
 static void power_auto_poweroff_arm(Power* power) {
+    if(power->settings.auto_poweroff_mode != PowerAutoPoweroffModeTimer) return;
     if(power->settings.auto_poweroff_delay_ms) {
         if(power->input_events_subscription == NULL) {
             power->input_events_subscription = furi_pubsub_subscribe(
@@ -535,7 +536,8 @@ static void power_loader_callback(const void* message, void* context) {
 // apply power settings
 static void power_settings_apply(Power* power) {
     //apply auto_poweroff settings
-    if(power->settings.auto_poweroff_delay_ms && !power->app_running) {
+    if(power->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimer &&
+       power->settings.auto_poweroff_delay_ms && !power->app_running) {
         power_auto_poweroff_arm(power);
     } else if(power_is_running_auto_poweroff_timer(power)) {
         power_auto_poweroff_disarm(power);
