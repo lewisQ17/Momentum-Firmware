@@ -3,6 +3,7 @@
 #include "../iso14443_4a/iso14443_4a_render.h"
 #include <bit_lib.h>
 #include "nfc/nfc_app_i.h"
+#include <momentum/momentum.h>
 
 void nfc_render_emv_info(const EmvData* data, NfcProtocolFormatType format_type, FuriString* str) {
     nfc_render_emv_header(str);
@@ -46,6 +47,23 @@ void nfc_render_emv_pan(const uint8_t* data, const uint8_t len, FuriString* str)
 
     // Cut padding 'F' from card number
     furi_string_trim(card_number, "F");
+
+    if(momentum_settings.nfc_mask_pan) {
+        // Privacy: mask every digit except the last 4, keeping the grouping
+        // spaces so the on-screen layout is unchanged.
+        size_t size = furi_string_size(card_number);
+        size_t total_digits = 0;
+        for(size_t i = 0; i < size; i++) {
+            if(furi_string_get_char(card_number, i) != ' ') total_digits++;
+        }
+        size_t to_mask = (total_digits > 4) ? (total_digits - 4) : 0;
+        size_t seen = 0;
+        for(size_t i = 0; i < size; i++) {
+            if(furi_string_get_char(card_number, i) == ' ') continue;
+            if(++seen <= to_mask) furi_string_set_char(card_number, i, '*');
+        }
+    }
+
     furi_string_cat(str, card_number);
     furi_string_free(card_number);
 

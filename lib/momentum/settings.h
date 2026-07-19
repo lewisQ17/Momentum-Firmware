@@ -96,6 +96,7 @@ typedef struct {
     uint32_t butthurt_timer;
     bool midnight_format_00;
     bool popup_overlay;
+    bool nfc_mask_pan;
     SpiHandle spi_cc1101_handle;
     SpiHandle spi_nrf24_handle;
     FuriHalSerialId uart_esp_channel;

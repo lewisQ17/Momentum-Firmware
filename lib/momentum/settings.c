@@ -3,6 +3,7 @@
 #include <furi_hal.h>
 #include <rgb_backlight.h>
 #include <flipper_format/flipper_format.h>
+#include <storage/storage.h>
 
 #define TAG "MomentumSettings"
 
@@ -113,6 +114,7 @@ static const struct {
     {setting_uint(butthurt_timer, 0, 172800)},
     {setting_bool(midnight_format_00)},
     {setting_bool(popup_overlay)},
+    {setting_bool(nfc_mask_pan)},
     {setting_enum(spi_cc1101_handle, SpiCount)},
     {setting_enum(spi_nrf24_handle, SpiCount)},
     {setting_enum(uart_esp_channel, FuriHalSerialIdMax)},
@@ -172,7 +174,11 @@ void momentum_settings_save(void) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* file = flipper_format_file_alloc(storage);
 
-    if(flipper_format_file_open_always(file, MOMENTUM_SETTINGS_PATH)) {
+    // Write to a temp file, then atomically rename it over the live settings so a
+    // power loss (battery pull / USB yank) mid-write can't leave the real file
+    // truncated/corrupt — only the temp copy is ever written in place.
+    bool written = flipper_format_file_open_always(file, MOMENTUM_SETTINGS_PATH ".tmp");
+    if(written) {
         int32_t tmp_int;
         uint32_t tmp_uint;
         for(size_t entry_i = 0; entry_i < COUNT_OF(momentum_settings_entries); entry_i++) {
@@ -201,5 +207,13 @@ void momentum_settings_save(void) {
     }
 
     flipper_format_free(file);
+
+    if(written) {
+        // Atomic replace: remove the old file then rename the fully-written temp
+        // over it (FatFs rename is atomic; the vulnerable long write is done).
+        storage_common_remove(storage, MOMENTUM_SETTINGS_PATH);
+        storage_common_rename(storage, MOMENTUM_SETTINGS_PATH ".tmp", MOMENTUM_SETTINGS_PATH);
+    }
+
     furi_record_close(RECORD_STORAGE);
 }
