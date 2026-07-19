@@ -23,6 +23,24 @@ bool desktop_pin_code_check(const DesktopPinCode* pin_code);
 
 bool desktop_pin_code_is_equal(const DesktopPinCode* pin_code1, const DesktopPinCode* pin_code2);
 
+/** Optional "duress" PIN — an opt-in second PIN that, when entered at the
+ * lockscreen, silently wipes the SD card + RTC state and reboots instead of
+ * unlocking. Stored in its own RTC backup register (never on the SD card).
+ * All functions are no-ops / false when no duress PIN is configured. */
+
+/** @return true if a duress PIN is currently configured */
+bool desktop_duress_pin_is_set(void);
+
+/** Store the duress PIN (packed into its RTC register). Caller MUST ensure it
+ * differs from the unlock PIN. */
+void desktop_pin_code_set_duress(const DesktopPinCode* pin_code);
+
+/** Clear any configured duress PIN */
+void desktop_pin_code_reset_duress(void);
+
+/** @return true only if a duress PIN is set AND the given code matches it */
+bool desktop_pin_code_is_duress(const DesktopPinCode* pin_code);
+
 void desktop_pin_lock_error_notify(void);
 
 uint32_t desktop_pin_lock_get_fail_timeout(void);

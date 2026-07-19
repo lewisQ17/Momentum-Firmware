@@ -77,7 +77,19 @@ bool desktop_settings_scene_pin_setup_on_event(void* context, SceneManagerEvent 
             consumed = true;
             break;
         case DesktopSettingsCustomEventPinsEqual:
-            scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinSetupHowto2);
+            if(app->pin_setup_duress && desktop_pin_code_is_set() &&
+               desktop_pin_code_check(&app->pincode_buffer)) {
+                // A duress PIN identical to the unlock PIN would wipe on every real
+                // unlock — reject and send the user back to pick a different one.
+                scene_manager_set_scene_state(
+                    app->scene_manager,
+                    DesktopSettingsAppScenePinError,
+                    SCENE_STATE_PIN_ERROR_DURESS_SAME);
+                scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinError);
+            } else {
+                scene_manager_next_scene(
+                    app->scene_manager, DesktopSettingsAppScenePinSetupHowto2);
+            }
             consumed = true;
             break;
         case DesktopSettingsCustomEventExit: {

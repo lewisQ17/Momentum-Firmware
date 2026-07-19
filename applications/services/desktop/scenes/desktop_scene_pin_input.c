@@ -53,6 +53,21 @@ static void desktop_scene_pin_input_back_callback(void* context) {
 static void desktop_scene_pin_input_done_callback(const DesktopPinCode* pin_code, void* context) {
     Desktop* desktop = (Desktop*)context;
 
+    // Duress PIN (opt-in): if the entered code matches the configured duress PIN,
+    // wipe the SD card + RTC state and reboot instead of unlocking. Checked first
+    // so it takes precedence; setup guarantees it differs from the unlock PIN, so
+    // a legitimate unlock can never land here. To an onlooker this looks like an
+    // ordinary reboot.
+    if(desktop_pin_code_is_duress(pin_code)) {
+        Storage* storage = furi_record_open(RECORD_STORAGE);
+        storage_sd_format(storage);
+        furi_record_close(RECORD_STORAGE);
+        furi_hal_rtc_reset_registers();
+        Power* power = furi_record_open(RECORD_POWER);
+        power_reboot(power, PowerBootModeNormal);
+        return;
+    }
+
     if(desktop_pin_code_check(pin_code)) {
         view_dispatcher_send_custom_event(desktop->view_dispatcher, DesktopPinInputEventUnlocked);
 

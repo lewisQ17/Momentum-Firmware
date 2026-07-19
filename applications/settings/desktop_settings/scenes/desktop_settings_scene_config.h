@@ -7,6 +7,7 @@ ADD_SCENE(desktop_settings, keybinds_reset, KeybindsReset)
 ADD_SCENE(desktop_settings, pin_menu, PinMenu)
 
 ADD_SCENE(desktop_settings, pin_auth, PinAuth)
+ADD_SCENE(desktop_settings, pin_duress_warn, PinDuressWarn)
 ADD_SCENE(desktop_settings, pin_error, PinError)
 ADD_SCENE(desktop_settings, pin_disable, PinDisable)
 ADD_SCENE(desktop_settings, pin_setup, PinSetup)

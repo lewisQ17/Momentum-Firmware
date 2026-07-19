@@ -70,6 +70,28 @@ bool desktop_pin_code_is_equal(const DesktopPinCode* pin_code1, const DesktopPin
            memcmp(pin_code1->data, pin_code2->data, pin_code1->length) == 0;
 }
 
+bool desktop_duress_pin_is_set(void) {
+    uint8_t length =
+        furi_hal_rtc_get_register(FuriHalRtcRegisterDuressPinValue) >> DESKTOP_PIN_CODE_LENGTH_OFFSET;
+    return length >= DESKTOP_PIN_CODE_MIN_LEN && length <= DESKTOP_PIN_CODE_MAX_LEN;
+}
+
+void desktop_pin_code_set_duress(const DesktopPinCode* pin_code) {
+    furi_hal_rtc_set_register(FuriHalRtcRegisterDuressPinValue, desktop_pin_code_pack(pin_code));
+}
+
+void desktop_pin_code_reset_duress(void) {
+    furi_hal_rtc_set_register(FuriHalRtcRegisterDuressPinValue, 0);
+}
+
+bool desktop_pin_code_is_duress(const DesktopPinCode* pin_code) {
+    // Never treat an unconfigured (zeroed) register as a match: a 0-length pack
+    // could otherwise collide with an empty entry.
+    if(!desktop_duress_pin_is_set()) return false;
+    return furi_hal_rtc_get_register(FuriHalRtcRegisterDuressPinValue) ==
+           desktop_pin_code_pack(pin_code);
+}
+
 void desktop_pin_lock_error_notify(void) {
     NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
     notification_message(notification, &sequence_pin_fail);

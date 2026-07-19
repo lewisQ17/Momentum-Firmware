@@ -57,6 +57,7 @@ typedef struct {
 
     DesktopPinCode pincode_buffer;
     bool pincode_buffer_filled;
+    bool pin_setup_duress; // true while the PIN-setup flow is configuring the duress PIN
 
     uint32_t pin_menu_idx;
 

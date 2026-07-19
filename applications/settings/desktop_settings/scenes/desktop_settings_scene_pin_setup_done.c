@@ -21,7 +21,13 @@ static void pin_setup_done_callback(const DesktopPinCode* pin_code, void* contex
 void desktop_settings_scene_pin_setup_done_on_enter(void* context) {
     DesktopSettingsApp* app = context;
 
-    desktop_pin_code_set(&app->pincode_buffer);
+    const bool duress = app->pin_setup_duress;
+    if(duress) {
+        // setup.c already rejected a duress PIN equal to the unlock PIN.
+        desktop_pin_code_set_duress(&app->pincode_buffer);
+    } else {
+        desktop_pin_code_set(&app->pincode_buffer);
+    }
 
     NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
     notification_message(notification, &sequence_single_vibro);
@@ -33,7 +39,8 @@ void desktop_settings_scene_pin_setup_done_on_enter(void* context) {
     desktop_view_pin_input_set_done_callback(app->pin_input_view, pin_setup_done_callback);
     desktop_view_pin_input_set_pin(app->pin_input_view, &app->pincode_buffer);
     desktop_view_pin_input_set_label_button(app->pin_input_view, "Done");
-    desktop_view_pin_input_set_label_primary(app->pin_input_view, 29, 8, "PIN Activated!");
+    desktop_view_pin_input_set_label_primary(
+        app->pin_input_view, duress ? 24 : 29, 8, duress ? "Duress PIN Set!" : "PIN Activated!");
     desktop_view_pin_input_set_label_secondary(
         app->pin_input_view, 7, 45, "Remember or write it down");
     desktop_view_pin_input_lock_input(app->pin_input_view);
@@ -70,6 +77,7 @@ bool desktop_settings_scene_pin_setup_done_on_event(void* context, SceneManagerE
 void desktop_settings_scene_pin_setup_done_on_exit(void* context) {
     furi_assert(context);
     DesktopSettingsApp* app = context;
+    app->pin_setup_duress = false; // done configuring; never leak duress mode
     desktop_view_pin_input_set_pin_position(app->pin_input_view, 64, 32);
     desktop_view_pin_input_set_back_callback(app->pin_input_view, NULL);
     desktop_view_pin_input_set_done_callback(app->pin_input_view, NULL);

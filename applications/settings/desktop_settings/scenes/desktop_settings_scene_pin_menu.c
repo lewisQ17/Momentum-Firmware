@@ -16,6 +16,10 @@ void desktop_settings_scene_pin_menu_on_enter(void* context) {
     Submenu* submenu = app->submenu;
     submenu_reset(submenu);
 
+    // Never leave the setup flow in duress mode by accident; re-arm only on an
+    // explicit "Set Duress PIN" selection below.
+    app->pin_setup_duress = false;
+
     if(!desktop_pin_code_is_set()) {
         submenu_add_item(
             submenu,
@@ -38,6 +42,23 @@ void desktop_settings_scene_pin_menu_on_enter(void* context) {
             DesktopSettingsCustomEventDisablePin,
             desktop_settings_scene_pin_menu_submenu_callback,
             app);
+
+        // Duress PIN only makes sense once a lock exists.
+        if(!desktop_duress_pin_is_set()) {
+            submenu_add_item(
+                submenu,
+                "Set Duress PIN",
+                DesktopSettingsCustomEventSetDuressPin,
+                desktop_settings_scene_pin_menu_submenu_callback,
+                app);
+        } else {
+            submenu_add_item(
+                submenu,
+                "Remove Duress PIN",
+                DesktopSettingsCustomEventRemoveDuressPin,
+                desktop_settings_scene_pin_menu_submenu_callback,
+                app);
+        }
     }
 
     submenu_set_header(app->submenu, "PIN Code Settings");
@@ -67,6 +88,17 @@ bool desktop_settings_scene_pin_menu_on_event(void* context, SceneManagerEvent e
             scene_manager_set_scene_state(
                 app->scene_manager, DesktopSettingsAppScenePinAuth, SCENE_STATE_PIN_AUTH_DISABLE);
             scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinAuth);
+            consumed = true;
+            break;
+        case DesktopSettingsCustomEventSetDuressPin:
+            app->pin_setup_duress = true;
+            scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinDuressWarn);
+            consumed = true;
+            break;
+        case DesktopSettingsCustomEventRemoveDuressPin:
+            desktop_pin_code_reset_duress();
+            // Rebuild the menu so the item flips back to "Set Duress PIN".
+            desktop_settings_scene_pin_menu_on_enter(app);
             consumed = true;
             break;
         default:
