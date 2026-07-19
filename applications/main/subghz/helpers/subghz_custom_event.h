@@ -17,6 +17,7 @@ typedef enum {
     SubGhzCustomEventSceneReceiverInfoSave,
     SubGhzCustomEventSceneReceiverInfoSats,
     SubGhzCustomEventSceneReceiverInfoMore,
+    SubGhzCustomEventSceneSignalInspectorSave,
     SubGhzCustomEventSceneSaveName,
     SubGhzCustomEventSceneSignalSettings,
     SubGhzCustomEventSceneSaveSuccess,
