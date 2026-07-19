@@ -150,6 +150,9 @@ static void hid_media_process_press(HidMedia* hid_media, InputEvent* event) {
                 hid_hal_consumer_key_press(hid_media->hid, HID_CONSUMER_PLAY_PAUSE);
             } else if(event->key == InputKeyBack) {
                 model->back_pressed = true;
+                // Short-press Back = Mute (long-press Back still exits the view,
+                // handled in hid_media_input_callback). Back was visual-only. (#140)
+                hid_hal_consumer_key_press(hid_media->hid, HID_CONSUMER_MUTE);
             }
         },
         true);
@@ -177,6 +180,7 @@ static void hid_media_process_release(HidMedia* hid_media, InputEvent* event) {
                 hid_hal_consumer_key_release(hid_media->hid, HID_CONSUMER_PLAY_PAUSE);
             } else if(event->key == InputKeyBack) {
                 model->back_pressed = false;
+                hid_hal_consumer_key_release(hid_media->hid, HID_CONSUMER_MUTE);
             }
         },
         true);
