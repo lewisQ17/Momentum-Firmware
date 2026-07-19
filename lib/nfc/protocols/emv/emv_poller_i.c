@@ -84,7 +84,7 @@ static void emv_trace(EmvPoller* instance, const char* message) {
 // For a well-formed card tlen is always <= cap, so this is a no-op there.
 static inline uint8_t
     emv_tlv_copy_clamped(void* dst, const uint8_t* src, uint8_t tlen, uint8_t cap) {
-    uint8_t n = (tlen < cap) ? tlen : cap;
+    uint8_t n = MIN(tlen, cap);
     memcpy(dst, src, n);
     return n;
 }

@@ -28,6 +28,10 @@ const NfcDeviceBase nfc_device_emv = {
 EmvData* emv_alloc(void) {
     EmvData* data = malloc(sizeof(EmvData));
     data->iso14443_4a_data = iso14443_4a_alloc();
+    // malloc does not clear memory, and several EmvApplication fields are
+    // rendered/saved even when a card omits their tag. Zero it up-front (same as
+    // emv_reset) so the poller's per-field stale-data guards are defense-in-depth.
+    memset(&data->emv_application, 0, sizeof(EmvApplication));
     data->emv_application.pin_try_counter = 0xff;
 
     return data;
@@ -62,6 +66,25 @@ void emv_copy(EmvData* destination, const EmvData* source) {
 bool emv_verify(EmvData* data, const FuriString* device_type) {
     UNUSED(data);
     return furi_string_equal_str(device_type, EMV_PROTOCOL_NAME);
+}
+
+// Read a "<len_key>" uint32 length followed by its "<hex_key>" hex blob into a
+// fixed-size buffer, rejecting the whole file if the declared length exceeds the
+// destination capacity (guards against a heap overflow from a malformed/malicious
+// .nfc file). Shared by the PAN and AID load paths.
+static bool emv_load_len_prefixed_hex(
+    FlipperFormat* ff,
+    const char* len_key,
+    const char* hex_key,
+    uint8_t* dst,
+    size_t dst_cap,
+    uint8_t* out_len) {
+    uint32_t len;
+    if(!flipper_format_read_uint32(ff, len_key, &len, 1)) return false;
+    if(len > dst_cap) return false;
+    if(!flipper_format_read_hex(ff, hex_key, dst, len)) return false;
+    *out_len = (uint8_t)len;
+    return true;
 }
 
 bool emv_load(EmvData* data, FlipperFormat* ff, uint32_t version) {
@@ -101,23 +124,16 @@ bool emv_load(EmvData* data, FlipperFormat* ff, uint32_t version) {
             sizeof(app->application_label) - 1);
         app->application_label[sizeof(app->application_label) - 1] = '\0';
 
-        uint32_t pan_len;
-        if(!flipper_format_read_uint32(ff, "PAN length", &pan_len, 1)) break;
-        // Reject malformed/malicious files: a PAN is at most sizeof(app->pan)
-        // bytes (10 = 19 BCD digits). Guards against a heap overflow write.
-        if(pan_len > sizeof(app->pan)) break;
-        app->pan_len = pan_len;
+        // PAN: max sizeof(app->pan) (10 = 19 BCD digits); AID: max sizeof(app->aid)
+        // (16) per EMV. The helper rejects the file if the declared length exceeds
+        // the buffer, preventing a heap overflow write.
+        if(!emv_load_len_prefixed_hex(
+               ff, "PAN length", "PAN", app->pan, sizeof(app->pan), &app->pan_len))
+            break;
 
-        if(!flipper_format_read_hex(ff, "PAN", app->pan, pan_len)) break;
-
-        uint32_t aid_len;
-        if(!flipper_format_read_uint32(ff, "AID length", &aid_len, 1)) break;
-        // Reject malformed/malicious files: an AID is at most sizeof(app->aid)
-        // bytes (16) per EMV. Guards against a heap overflow write.
-        if(aid_len > sizeof(app->aid)) break;
-        app->aid_len = aid_len;
-
-        if(!flipper_format_read_hex(ff, "AID", app->aid, aid_len)) break;
+        if(!emv_load_len_prefixed_hex(
+               ff, "AID length", "AID", app->aid, sizeof(app->aid), &app->aid_len))
+            break;
 
         if(!flipper_format_read_hex(
                ff, "Application interchange profile", app->application_interchange_profile, 2))

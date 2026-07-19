@@ -349,7 +349,10 @@ static bool compress_decode_internal(
             *data_res_size = data_out_size - decompressed_context.data_size;
         }
     } else if(data_out_size >= data_in_size - 1) {
-        memcpy(data_out, &data_in[1], data_in_size);
+        // Payload is data_in_size - 1 bytes (data_in[0] is the header). Copying
+        // data_in_size would read one byte past data_in and, when data_out is
+        // sized exactly to the payload, write one byte past data_out.
+        memcpy(data_out, &data_in[1], data_in_size - 1);
         *data_res_size = data_in_size - 1;
         result = true;
     } else {
