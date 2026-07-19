@@ -114,6 +114,15 @@ static void archive_update_formatted_path(ArchiveBrowserViewModel* model) {
     browser->path_changed = false;
 }
 
+static bool archive_is_file_selected(ArchiveBrowserViewModel* model, FuriString* path) {
+    for(size_t i = 0; i < model->selected_count; i++) {
+        if(furi_string_equal(model->selected_files[i], path)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void render_item_menu(Canvas* canvas, ArchiveBrowserViewModel* model) {
     if(menu_array_size(model->context_menu) == 0) {
         // Need init context menu
@@ -123,7 +132,19 @@ static void render_item_menu(Canvas* canvas, ArchiveBrowserViewModel* model) {
                 NULL;
         bool favorites = model->tab_idx == ArchiveTabFavorites;
 
-        if(model->menu_manage) {
+        if(model->menu_manage && model->select_mode) {
+            // Select mode: only batch actions are offered
+            if(model->selected_count > 0) {
+                archive_menu_add_item(
+                    menu_array_push_raw(model->context_menu),
+                    "Delete Sel.",
+                    ArchiveBrowserEventDeleteSelected);
+            }
+            archive_menu_add_item(
+                menu_array_push_raw(model->context_menu),
+                "Exit Select",
+                ArchiveBrowserEventExitSelect);
+        } else if(model->menu_manage) {
             if(!model->is_app_tab && !favorites) {
                 if(model->clipboard != NULL) {
                     archive_menu_add_item(
@@ -187,6 +208,12 @@ static void render_item_menu(Canvas* canvas, ArchiveBrowserViewModel* model) {
                     menu_array_push_raw(model->context_menu),
                     "Move",
                     ArchiveBrowserEventEnterFavMove);
+            }
+            if(!favorites && !model->is_app_tab && !model->select_mode) {
+                archive_menu_add_item(
+                    menu_array_push_raw(model->context_menu),
+                    "Select",
+                    ArchiveBrowserEventEnterSelect);
             }
         }
     }
@@ -262,11 +289,15 @@ static void draw_list_item(
 
     ArchiveFileTypeEnum file_type = ArchiveFileTypeLoading;
     uint8_t* custom_icon_data = NULL;
+    bool item_selected = false;
 
     if(!model->list_loading && archive_is_item_in_array(model, idx)) {
         ArchiveFile_t* file = files_array_get(
             model->files, CLAMP(idx - model->array_offset, (int32_t)(array_size - 1), 0));
         file_type = file->type;
+        if(model->select_mode) {
+            item_selected = archive_is_file_selected(model, file->path);
+        }
         bool ext = model->tab_idx == ArchiveTabBrowser || model->tab_idx == ArchiveTabInternal ||
                    model->tab_idx == ArchiveTabDiskImage || model->tab_idx == ArchiveTabSearch;
         if(file_type == ArchiveFileTypeApplication) {
@@ -298,7 +329,20 @@ static void draw_list_item(
         scroll_counter = 0;
     }
 
-    if(custom_icon_data) {
+    if(item_selected) {
+        // Draw a check marker in place of the file-type icon on selected rows.
+        // Contrast is flipped on the highlighted (current) row which has a black frame.
+        bool current = model->item_idx == idx;
+        uint8_t bx = 2 + x_offset;
+        uint8_t by = 16 + i * FRAME_HEIGHT;
+        canvas_set_color(canvas, current ? ColorBlack : ColorWhite);
+        canvas_draw_box(canvas, bx, by, 11, 10);
+        canvas_set_color(canvas, current ? ColorWhite : ColorBlack);
+        canvas_draw_line(canvas, bx + 1, by + 4, bx + 4, by + 7);
+        canvas_draw_line(canvas, bx + 4, by + 7, bx + 9, by + 1);
+        canvas_draw_line(canvas, bx + 1, by + 5, bx + 4, by + 8);
+        canvas_draw_line(canvas, bx + 4, by + 8, bx + 9, by + 2);
+    } else if(custom_icon_data) {
         canvas_draw_bitmap(canvas, 2 + x_offset, 16 + i * FRAME_HEIGHT, 11, 10, custom_icon_data);
     } else {
         canvas_draw_icon(canvas, 2 + x_offset, 16 + i * FRAME_HEIGHT, ArchiveItemIcons[file_type]);
@@ -401,6 +445,13 @@ static void archive_render_status_bar(Canvas* canvas, ArchiveBrowserViewModel* m
     if(model->move_fav) {
         canvas_draw_icon(canvas, 110, 4, &I_ButtonUp_7x4);
         canvas_draw_icon(canvas, 117, 4, &I_ButtonDown_7x4);
+    } else if(model->select_mode) {
+        // Check glyph indicates multi-select mode is active
+        canvas_set_color(canvas, ColorBlack);
+        canvas_draw_line(canvas, 113, 6, 116, 9);
+        canvas_draw_line(canvas, 116, 9, 122, 3);
+        canvas_draw_line(canvas, 113, 7, 116, 10);
+        canvas_draw_line(canvas, 116, 10, 122, 4);
     } else {
         canvas_draw_icon(canvas, 111, 2, &I_ButtonLeft_4x7);
         canvas_draw_icon(canvas, 119, 2, &I_ButtonRight_4x7);
@@ -451,6 +502,7 @@ static bool archive_view_input(InputEvent* event, void* context) {
 
     bool in_menu;
     bool move_fav_mode;
+    bool select_mode;
     bool is_loading;
     with_view_model(
         browser->view,
@@ -458,6 +510,7 @@ static bool archive_view_input(InputEvent* event, void* context) {
         {
             in_menu = model->menu;
             move_fav_mode = model->move_fav;
+            select_mode = model->select_mode;
             is_loading = model->folder_loading || model->list_loading;
         },
         false);
@@ -600,14 +653,16 @@ static bool archive_view_input(InputEvent* event, void* context) {
             archive_update_offset(browser);
         } else if(event->type == InputTypeShort) {
             if(event->key == InputKeyLeft || event->key == InputKeyRight) {
-                if(move_fav_mode) {
-                    return true; // Return without doing anything
+                if(move_fav_mode || select_mode) {
+                    return true; // Tab switching disabled during move / select mode
                 } else {
                     archive_switch_tab(browser, event->key);
                 }
             } else if(event->key == InputKeyOk) {
                 if(move_fav_mode) {
                     browser->callback(ArchiveBrowserEventSaveFavMove, browser->context);
+                } else if(select_mode) {
+                    browser->callback(ArchiveBrowserEventToggleSelect, browser->context);
                 } else if(selected && selected->type == ArchiveFileTypeFolder) {
                     browser->callback(ArchiveBrowserEventEnterDir, browser->context);
                 } else if(selected && archive_is_known_app(selected->type)) {
@@ -618,6 +673,8 @@ static bool archive_view_input(InputEvent* event, void* context) {
             } else if(event->key == InputKeyBack) {
                 if(move_fav_mode) {
                     browser->callback(ArchiveBrowserEventExitFavMove, browser->context);
+                } else if(select_mode) {
+                    browser->callback(ArchiveBrowserEventExitSelect, browser->context);
                 } else {
                     browser->callback(ArchiveBrowserEventExit, browser->context);
                 }
@@ -626,6 +683,8 @@ static bool archive_view_input(InputEvent* event, void* context) {
             if(event->key == InputKeyOk) {
                 if(move_fav_mode) {
                     browser->callback(ArchiveBrowserEventSaveFavMove, browser->context);
+                } else if(select_mode) {
+                    browser->callback(ArchiveBrowserEventExitSelect, browser->context);
                 } else {
                     browser->callback(ArchiveBrowserEventFileMenuOpen, browser->context);
                 }
@@ -713,6 +772,11 @@ void browser_free(ArchiveBrowserView* browser) {
         browser->view,
         ArchiveBrowserViewModel * model,
         {
+            for(size_t i = 0; i < model->selected_count; i++) {
+                furi_string_free(model->selected_files[i]);
+                model->selected_files[i] = NULL;
+            }
+            model->selected_count = 0;
             files_array_clear(model->files);
             menu_array_clear(model->context_menu);
         },

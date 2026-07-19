@@ -501,6 +501,11 @@ void archive_show_file_menu(ArchiveBrowserView* browser, bool show, bool manage)
                     model->menu_manage = true;
                     model->menu_can_switch = false;
                 }
+                // In select mode the menu only offers batch actions
+                if(model->select_mode) {
+                    model->menu_manage = true;
+                    model->menu_can_switch = false;
+                }
             } else {
                 model->menu = false;
                 model->menu_idx = 0;
@@ -515,6 +520,147 @@ void archive_favorites_move_mode(ArchiveBrowserView* browser, bool active) {
 
     with_view_model(
         browser->view, ArchiveBrowserViewModel * model, { model->move_fav = active; }, true);
+}
+
+void archive_set_select_mode(ArchiveBrowserView* browser, bool active) {
+    furi_assert(browser);
+
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            // Leaving select mode always frees the pending selection
+            if(!active) {
+                for(size_t i = 0; i < model->selected_count; i++) {
+                    furi_string_free(model->selected_files[i]);
+                    model->selected_files[i] = NULL;
+                }
+                model->selected_count = 0;
+            }
+            model->select_mode = active;
+        },
+        true);
+}
+
+bool archive_get_select_mode(ArchiveBrowserView* browser) {
+    furi_assert(browser);
+
+    bool active = false;
+    with_view_model(
+        browser->view, ArchiveBrowserViewModel * model, { active = model->select_mode; }, false);
+    return active;
+}
+
+void archive_selection_clear(ArchiveBrowserView* browser) {
+    furi_assert(browser);
+
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            for(size_t i = 0; i < model->selected_count; i++) {
+                furi_string_free(model->selected_files[i]);
+                model->selected_files[i] = NULL;
+            }
+            model->selected_count = 0;
+        },
+        true);
+}
+
+size_t archive_get_selected_count(ArchiveBrowserView* browser) {
+    furi_assert(browser);
+
+    size_t count = 0;
+    with_view_model(
+        browser->view, ArchiveBrowserViewModel * model, { count = model->selected_count; }, false);
+    return count;
+}
+
+void archive_selection_toggle_current(ArchiveBrowserView* browser) {
+    furi_assert(browser);
+
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            ArchiveFile_t* current =
+                archive_is_item_in_array(model, model->item_idx) ?
+                    files_array_get(model->files, model->item_idx - model->array_offset) :
+                    NULL;
+            if(current != NULL) {
+                size_t found = ARCHIVE_SELECT_MAX;
+                for(size_t i = 0; i < model->selected_count; i++) {
+                    if(furi_string_equal(model->selected_files[i], current->path)) {
+                        found = i;
+                        break;
+                    }
+                }
+                if(found != ARCHIVE_SELECT_MAX) {
+                    // Deselect: free and compact the array
+                    furi_string_free(model->selected_files[found]);
+                    for(size_t i = found; i + 1 < model->selected_count; i++) {
+                        model->selected_files[i] = model->selected_files[i + 1];
+                    }
+                    model->selected_count--;
+                    model->selected_files[model->selected_count] = NULL;
+                } else if(model->selected_count < ARCHIVE_SELECT_MAX) {
+                    // Select: store an owned copy of the absolute path
+                    model->selected_files[model->selected_count] =
+                        furi_string_alloc_set(current->path);
+                    model->selected_count++;
+                }
+                // else: selection cap reached, ignore
+            }
+        },
+        true);
+}
+
+void archive_delete_selected(ArchiveBrowserView* browser) {
+    furi_assert(browser);
+
+    Storage* fs_api = furi_record_open(RECORD_STORAGE);
+
+    // Drain the selection one path at a time: the view lock is only held to pop a
+    // pointer (never during storage IO), and select mode is cleared once emptied.
+    while(true) {
+        FuriString* path = NULL;
+        with_view_model(
+            browser->view,
+            ArchiveBrowserViewModel * model,
+            {
+                if(model->selected_count > 0) {
+                    path = model->selected_files[0];
+                    for(size_t i = 0; i + 1 < model->selected_count; i++) {
+                        model->selected_files[i] = model->selected_files[i + 1];
+                    }
+                    model->selected_count--;
+                    model->selected_files[model->selected_count] = NULL;
+                } else {
+                    model->select_mode = false;
+                }
+            },
+            false);
+
+        if(path == NULL) {
+            break;
+        }
+
+        const char* path_cstr = furi_string_get_cstr(path);
+        FileInfo fileinfo;
+        if(storage_common_stat(fs_api, path_cstr, &fileinfo) == FSE_OK) {
+            if(file_info_is_dir(&fileinfo)) {
+                storage_simply_remove_recursive(fs_api, path_cstr);
+            } else {
+                storage_common_remove(fs_api, path_cstr);
+            }
+        }
+        if(archive_is_favorite("%s", path_cstr)) {
+            archive_favorites_delete("%s", path_cstr);
+        }
+        furi_string_free(path);
+    }
+
+    furi_record_close(RECORD_STORAGE);
 }
 
 static bool archive_is_dir_exists(FuriString* path) {

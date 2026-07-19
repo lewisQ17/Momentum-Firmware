@@ -21,6 +21,9 @@
 #define MENU_ITEMS   5u
 #define MOVE_OFFSET  5u
 
+// Max number of files that can be multi-selected at once (bounds RAM usage)
+#define ARCHIVE_SELECT_MAX 64u
+
 typedef enum {
     ArchiveTabFavorites,
     ArchiveTabSubGhz,
@@ -68,6 +71,11 @@ typedef enum {
     ArchiveBrowserEventLoadNextItems,
 
     ArchiveBrowserEventListRefresh,
+
+    ArchiveBrowserEventEnterSelect,
+    ArchiveBrowserEventExitSelect,
+    ArchiveBrowserEventToggleSelect,
+    ArchiveBrowserEventDeleteSelected,
 
     ArchiveBrowserEventExit,
 } ArchiveBrowserEvent;
@@ -123,6 +131,10 @@ typedef struct {
     size_t scroll_counter;
 
     int32_t button_held_for_ticks;
+
+    bool select_mode;
+    FuriString* selected_files[ARCHIVE_SELECT_MAX];
+    size_t selected_count;
 } ArchiveBrowserViewModel;
 
 void archive_browser_set_callback(

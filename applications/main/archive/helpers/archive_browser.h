@@ -115,6 +115,13 @@ void archive_add_file_item(ArchiveBrowserView* browser, bool is_folder, const ch
 void archive_show_file_menu(ArchiveBrowserView* browser, bool show, bool manage);
 void archive_favorites_move_mode(ArchiveBrowserView* browser, bool active);
 
+void archive_set_select_mode(ArchiveBrowserView* browser, bool active);
+bool archive_get_select_mode(ArchiveBrowserView* browser);
+void archive_selection_clear(ArchiveBrowserView* browser);
+void archive_selection_toggle_current(ArchiveBrowserView* browser);
+size_t archive_get_selected_count(ArchiveBrowserView* browser);
+void archive_delete_selected(ArchiveBrowserView* browser);
+
 void archive_set_tab(ArchiveBrowserView* browser, ArchiveTabEnum tab);
 void archive_switch_tab(ArchiveBrowserView* browser, InputKey key);
 void archive_enter_dir(ArchiveBrowserView* browser, FuriString* name);

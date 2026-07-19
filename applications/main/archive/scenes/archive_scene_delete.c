@@ -21,24 +21,36 @@ void archive_scene_delete_on_enter(void* context) {
     widget_add_button_element(
         app->widget, GuiButtonTypeRight, "Delete", archive_scene_delete_widget_callback, app);
 
-    FuriString* filename;
-    filename = furi_string_alloc();
-
-    ArchiveFile_t* current = archive_get_current_file(app->browser);
-
-    FuriString* filename_no_ext = furi_string_alloc();
-    path_extract_filename(current->path, filename_no_ext, true);
-    strlcpy(app->text_store, furi_string_get_cstr(filename_no_ext), MAX_NAME_LEN);
-    furi_string_free(filename_no_ext);
-
-    path_extract_filename(current->path, filename, false);
+    bool batch = scene_manager_get_scene_state(app->scene_manager, ArchiveAppSceneDelete) != 0;
 
     char delete_str[64];
-    snprintf(delete_str, sizeof(delete_str), "\e#Delete %s?\e#", furi_string_get_cstr(filename));
+    if(batch) {
+        size_t count = archive_get_selected_count(app->browser);
+        snprintf(
+            delete_str,
+            sizeof(delete_str),
+            "\e#Delete %u selected?\e#",
+            (unsigned int)count);
+    } else {
+        FuriString* filename = furi_string_alloc();
+
+        ArchiveFile_t* current = archive_get_current_file(app->browser);
+
+        FuriString* filename_no_ext = furi_string_alloc();
+        path_extract_filename(current->path, filename_no_ext, true);
+        strlcpy(app->text_store, furi_string_get_cstr(filename_no_ext), MAX_NAME_LEN);
+        furi_string_free(filename_no_ext);
+
+        path_extract_filename(current->path, filename, false);
+
+        snprintf(
+            delete_str, sizeof(delete_str), "\e#Delete %s?\e#", furi_string_get_cstr(filename));
+
+        furi_string_free(filename);
+    }
+
     widget_add_text_box_element(
         app->widget, 0, 0, 128, 23, AlignCenter, AlignCenter, delete_str, false);
-
-    furi_string_free(filename);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ArchiveViewWidget);
 }
@@ -48,8 +60,6 @@ bool archive_scene_delete_on_event(void* context, SceneManagerEvent event) {
     ArchiveApp* app = (ArchiveApp*)context;
 
     ArchiveBrowserView* browser = app->browser;
-    ArchiveFile_t* selected = archive_get_current_file(browser);
-    const char* name = archive_get_name(browser);
 
     if(event.type == SceneManagerEventTypeCustom) {
         if(event.event == GuiButtonTypeRight) {
@@ -57,10 +67,18 @@ bool archive_scene_delete_on_event(void* context, SceneManagerEvent event) {
             view_dispatcher_switch_to_view(app->view_dispatcher, ArchiveViewStack);
             archive_show_loading_popup(app, true);
 
-            if(selected->is_app) {
-                archive_app_delete_file(browser, name);
+            bool batch =
+                scene_manager_get_scene_state(app->scene_manager, ArchiveAppSceneDelete) != 0;
+            if(batch) {
+                archive_delete_selected(browser);
             } else {
-                archive_delete_file(browser, "%s", name);
+                ArchiveFile_t* selected = archive_get_current_file(browser);
+                const char* name = archive_get_name(browser);
+                if(selected->is_app) {
+                    archive_app_delete_file(browser, name);
+                } else {
+                    archive_delete_file(browser, "%s", name);
+                }
             }
             archive_show_loading_popup(app, false);
             return scene_manager_previous_scene(app->scene_manager);
@@ -75,5 +93,7 @@ void archive_scene_delete_on_exit(void* context) {
     furi_assert(context);
     ArchiveApp* app = (ArchiveApp*)context;
 
+    // Reset batch flag so a subsequent single-file delete is not treated as batch
+    scene_manager_set_scene_state(app->scene_manager, ArchiveAppSceneDelete, 0);
     widget_reset(app->widget);
 }

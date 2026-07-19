@@ -423,7 +423,32 @@ bool archive_scene_browser_on_event(void* context, SceneManagerEvent event) {
             archive_show_file_menu(browser, false, false);
             scene_manager_set_scene_state(
                 archive->scene_manager, ArchiveAppSceneBrowser, SCENE_STATE_NEED_REFRESH);
+            scene_manager_set_scene_state(archive->scene_manager, ArchiveAppSceneDelete, 0);
             scene_manager_next_scene(archive->scene_manager, ArchiveAppSceneDelete);
+            consumed = true;
+            break;
+        case ArchiveBrowserEventEnterSelect:
+            archive_show_file_menu(browser, false, false);
+            archive_set_select_mode(browser, true);
+            consumed = true;
+            break;
+        case ArchiveBrowserEventExitSelect:
+            archive_show_file_menu(browser, false, false);
+            archive_set_select_mode(browser, false);
+            consumed = true;
+            break;
+        case ArchiveBrowserEventToggleSelect:
+            archive_selection_toggle_current(browser);
+            consumed = true;
+            break;
+        case ArchiveBrowserEventDeleteSelected:
+            archive_show_file_menu(browser, false, false);
+            if(archive_get_selected_count(browser) > 0) {
+                scene_manager_set_scene_state(
+                    archive->scene_manager, ArchiveAppSceneBrowser, SCENE_STATE_NEED_REFRESH);
+                scene_manager_set_scene_state(archive->scene_manager, ArchiveAppSceneDelete, 1);
+                scene_manager_next_scene(archive->scene_manager, ArchiveAppSceneDelete);
+            }
             consumed = true;
             break;
         case ArchiveBrowserEventEnterDir:
