@@ -214,6 +214,12 @@ Iso14443_3aError
                 FURI_LOG_T(TAG, "Sel resp: %02X", instance->col_res.sel_resp.sak);
                 if(instance->col_res.sel_req.nfcid[0] == ISO14443_3A_POLLER_SDD_CL) {
                     // Copy part of UID
+                    if(instance->data->uid_len + 3u > ISO14443_3A_MAX_UID_SIZE) {
+                        FURI_LOG_E(TAG, "UID too long");
+                        instance->state = Iso14443_3aPollerStateColResFailed;
+                        ret = Iso14443_3aErrorColResFailed;
+                        break;
+                    }
                     memcpy(
                         &instance->data->uid[instance->data->uid_len],
                         &instance->col_res.sel_req.nfcid[1],
@@ -223,6 +229,12 @@ Iso14443_3aError
                     instance->col_res.state = Iso14443_3aPollerColResStateStateNewCascade;
                 } else {
                     FURI_LOG_T(TAG, "Col resolution complete");
+                    if(instance->data->uid_len + 4u > ISO14443_3A_MAX_UID_SIZE) {
+                        FURI_LOG_E(TAG, "UID too long");
+                        instance->state = Iso14443_3aPollerStateColResFailed;
+                        ret = Iso14443_3aErrorColResFailed;
+                        break;
+                    }
                     instance->data->sak = instance->col_res.sel_resp.sak;
                     memcpy(
                         &instance->data->uid[instance->data->uid_len],

@@ -274,6 +274,11 @@ bool ibutton_protocols_load(iButtonProtocols* protocols, iButtonKey* key, const 
             ibutton_protocols_get_id_by_name(protocols, furi_string_get_cstr(tmp));
         ibutton_key_set_protocol_id(key, id);
 
+        // An unknown protocol name yields iButtonProtocolIdInvalid (-1); using it
+        // would index the group/protocol tables at -1 and call through a garbage
+        // function pointer. Mirror the guard in ibutton_cli_parse_key().
+        if(id == iButtonProtocolIdInvalid) break;
+
         GET_PROTOCOL_GROUP(id);
         if(!GROUP_BASE->load(GROUP_DATA, data, PROTOCOL_ID, version, ff)) break;
 
