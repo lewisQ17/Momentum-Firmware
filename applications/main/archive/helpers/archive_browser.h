@@ -98,6 +98,7 @@ void archive_update_focus(ArchiveBrowserView* browser, const char* target);
 
 void archive_file_array_load(ArchiveBrowserView* browser, int8_t dir);
 size_t archive_file_get_array_size(ArchiveBrowserView* browser);
+bool archive_file_array_contains(ArchiveBrowserView* browser, const char* path);
 void archive_file_array_rm_selected(ArchiveBrowserView* browser);
 void archive_file_array_swap(ArchiveBrowserView* browser, int8_t dir);
 void archive_file_array_rm_all(ArchiveBrowserView* browser);
