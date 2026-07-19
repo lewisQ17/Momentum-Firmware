@@ -2,6 +2,7 @@
 
 enum VarItemListIndex {
     VarItemListIndexBatteryIcon,
+    VarItemListIndexAutoPowerOff,
     VarItemListIndexShowClock,
     VarItemListIndexStatusIcons,
     VarItemListIndexBarBorders,
@@ -27,6 +28,23 @@ static void momentum_app_scene_interface_statusbar_battery_icon_changed(Variable
     uint8_t index = variable_item_get_current_value_index(item);
     variable_item_set_current_value_text(item, battery_icon_names[index]);
     momentum_settings.battery_icon = index;
+    app->save_settings = true;
+}
+
+#define AUTO_POWEROFF_PCT_COUNT 5
+// Index -> battery percentage: Off, 5%, 10%, 15%, 20% (pct = index * 5)
+const char* const auto_poweroff_pct_names[AUTO_POWEROFF_PCT_COUNT] = {
+    "OFF",
+    "5%",
+    "10%",
+    "15%",
+    "20%",
+};
+static void momentum_app_scene_interface_statusbar_auto_poweroff_changed(VariableItem* item) {
+    MomentumApp* app = variable_item_get_context(item);
+    uint8_t index = variable_item_get_current_value_index(item);
+    variable_item_set_current_value_text(item, auto_poweroff_pct_names[index]);
+    momentum_settings.auto_poweroff_pct = index * 5;
     app->save_settings = true;
 }
 
@@ -75,6 +93,19 @@ void momentum_app_scene_interface_statusbar_on_enter(void* context) {
         app);
     variable_item_set_current_value_index(item, momentum_settings.battery_icon);
     variable_item_set_current_value_text(item, battery_icon_names[momentum_settings.battery_icon]);
+
+    item = variable_item_list_add(
+        var_item_list,
+        "Auto Power Off",
+        AUTO_POWEROFF_PCT_COUNT,
+        momentum_app_scene_interface_statusbar_auto_poweroff_changed,
+        app);
+    uint8_t auto_poweroff_index = momentum_settings.auto_poweroff_pct / 5;
+    if(auto_poweroff_index >= AUTO_POWEROFF_PCT_COUNT) {
+        auto_poweroff_index = AUTO_POWEROFF_PCT_COUNT - 1;
+    }
+    variable_item_set_current_value_index(item, auto_poweroff_index);
+    variable_item_set_current_value_text(item, auto_poweroff_pct_names[auto_poweroff_index]);
 
     item = variable_item_list_add(
         var_item_list,

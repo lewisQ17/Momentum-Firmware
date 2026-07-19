@@ -38,6 +38,9 @@ struct Power {
     bool is_otg_requested;
     uint8_t battery_level;
     uint8_t power_off_timeout;
+    // Momentum: consecutive-sample debounce counter for the opt-in
+    // battery-percentage auto power-off (momentum_settings.auto_poweroff_pct).
+    uint8_t auto_poweroff_pct_count;
 
     PowerSettings settings;
     FuriTimer* auto_poweroff_timer;

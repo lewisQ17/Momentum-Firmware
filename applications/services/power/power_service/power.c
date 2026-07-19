@@ -14,6 +14,11 @@
 #define POWER_OFF_TIMEOUT_S  (90U)
 #define POWER_POLL_PERIOD_MS (1000UL)
 
+// Momentum: number of consecutive ~1s samples the battery-percentage
+// auto power-off condition must hold before shutting down. Debounces
+// fuel-gauge noise near the threshold so we never power off unexpectedly.
+#define POWER_AUTO_POWEROFF_PCT_DEBOUNCE (3U)
+
 #define POWER_VBUS_LOW_THRESHOLD   (4.0f)
 #define POWER_HEALTH_LOW_THRESHOLD (70U)
 
@@ -574,6 +579,29 @@ static void power_charge_supress(Power* power) {
     }
 }
 
+// Momentum: opt-in auto power-off when the battery reaches a user-set percentage.
+// Default 0 = Off. Only acts while discharging (never on charger) and only when
+// the fuel gauge reading is valid. The condition must hold for several
+// consecutive samples (debounce) before we shut down, so momentary fuel-gauge
+// noise near the threshold can't trigger an unexpected power-off. Shutdown reuses
+// the existing power_off() path (PowerMessageTypeShutdown -> furi_hal_power_off).
+static void power_check_auto_poweroff_pct(Power* power) {
+    const uint8_t threshold = momentum_settings.auto_poweroff_pct;
+    if(threshold > 0 && power->info.gauge_is_ok && !power->info.is_charging &&
+       power->info.charge <= threshold) {
+        if(power->auto_poweroff_pct_count < POWER_AUTO_POWEROFF_PCT_DEBOUNCE) {
+            power->auto_poweroff_pct_count++;
+        }
+        if(power->auto_poweroff_pct_count >= POWER_AUTO_POWEROFF_PCT_DEBOUNCE) {
+            power_off(power);
+        }
+    } else {
+        // Condition not met (disabled, charging, bad gauge, or above threshold):
+        // reset the debounce so it must build up again from scratch.
+        power->auto_poweroff_pct_count = 0;
+    }
+}
+
 static void power_tick_callback(void* context) {
     furi_assert(context);
     Power* power = context;
@@ -588,6 +616,8 @@ static void power_tick_callback(void* context) {
     power_check_battery_level_change(power);
     // charge supress arm/disarm
     power_charge_supress(power);
+    // Momentum: opt-in battery-percentage auto power-off (default Off)
+    power_check_auto_poweroff_pct(power);
     // Update battery view port
     view_port_enabled_set(
         power->battery_view_port, momentum_settings.battery_icon != BatteryIconOff);
@@ -647,6 +677,7 @@ static Power* power_alloc(void) {
     // State initialization
     power->power_off_timeout = POWER_OFF_TIMEOUT_S;
     power->show_battery_low_warning = true;
+    power->auto_poweroff_pct_count = 0;
     // Gui
     Gui* gui = furi_record_open(RECORD_GUI);
 
