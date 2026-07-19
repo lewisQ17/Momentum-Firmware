@@ -32,5 +32,8 @@ struct SubGhzTxRx {
     //unrelated file
     bool tx_from_internal_fff;
 
+    // Heap that the last tx_start required (for the "not enough memory" dialog)
+    size_t tx_min_heap_required;
+
     bool debug_pin_state;
 };

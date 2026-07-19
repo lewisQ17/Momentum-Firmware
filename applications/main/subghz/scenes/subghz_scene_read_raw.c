@@ -231,7 +231,12 @@ bool subghz_scene_read_raw_on_event(void* context, SceneManagerEvent event) {
                 //start send
                 subghz->state_notifications = SubGhzNotificationStateIDLE;
                 if(!subghz_tx_start(subghz, subghz_txrx_get_fff_data(subghz->txrx))) {
-                    subghz_rx_key_state_set(subghz, SubGhzRxKeyStateBack);
+                    // Keep the loaded-RAW state on a failed send (e.g. not enough
+                    // memory) so the user stays on the file instead of dropping back.
+                    if(subghz_rx_key_state_get(subghz) != SubGhzRxKeyStateRAWLoad &&
+                       subghz_rx_key_state_get(subghz) != SubGhzRxKeyStateRAWMore) {
+                        subghz_rx_key_state_set(subghz, SubGhzRxKeyStateBack);
+                    }
                     subghz_read_raw_set_status(
                         subghz->subghz_read_raw,
                         SubGhzReadRAWStatusIDLE,
