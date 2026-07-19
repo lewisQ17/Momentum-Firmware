@@ -74,15 +74,23 @@ void compress_icon_decode(CompressIcon* instance, const uint8_t* icon_data, uint
     CompressHeader* header = (CompressHeader*)icon_data;
     if(header->is_compressed) {
         size_t decoded_size = 0;
-        /* If decompression fails - check that decode_buf_size is large enough */
-        furi_check(compress_decode_internal(
-            instance->decoder,
-            icon_data,
-            /* Decoder will check/process headers again - need to pass them */
-            sizeof(CompressHeader) + header->compressed_buff_size,
-            instance->buffer,
-            instance->buffer_size,
-            &decoded_size));
+        if(!compress_decode_internal(
+               instance->decoder,
+               icon_data,
+               /* Decoder will check/process headers again - need to pass them */
+               sizeof(CompressHeader) + header->compressed_buff_size,
+               instance->buffer,
+               instance->buffer_size,
+               &decoded_size)) {
+            /* Malformed or oversized icon data (e.g. a corrupt custom asset
+               pack) must not crash the drawing thread / GUI service. Built-in
+               icons are compressed and sized to fit at build time and never
+               take this path, so a failure here means untrusted data: render a
+               blank icon instead of a furi_check crash. The log preserves the
+               original developer signal that a decode buffer was too small. */
+            FURI_LOG_E(TAG, "Icon decode failed (bad data or decode buffer too small)");
+            memset(instance->buffer, 0, instance->buffer_size);
+        }
         *output = instance->buffer;
     } else {
         *output = (uint8_t*)&icon_data[1];

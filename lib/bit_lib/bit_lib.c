@@ -38,9 +38,15 @@ uint8_t bit_lib_get_bits(const uint8_t* data, size_t position, uint8_t length) {
     if(shift == 0) {
         return data[position / 8] >> (8 - length);
     } else {
-        // TODO FL-3534: fix read out of bounds
+        // FL-3534: only read the next byte when the requested field actually
+        // crosses the byte boundary. When (shift + length) <= 8 the whole field
+        // lives in data[position / 8], and the next byte's bits would be shifted
+        // out by the final >> (8 - length) anyway, so reading it is both
+        // unnecessary and a 1-byte out-of-bounds read at the end of a buffer.
         uint8_t value = (data[position / 8] << (shift));
-        value |= data[position / 8 + 1] >> (8 - shift);
+        if(shift + length > 8) {
+            value |= data[position / 8 + 1] >> (8 - shift);
+        }
         value = value >> (8 - length);
         return value;
     }

@@ -76,23 +76,45 @@ bool emv_load(EmvData* data, FlipperFormat* ff, uint32_t version) {
 
         EmvApplication* app = &data->emv_application;
 
+        // The following strings come from an externally supplied .nfc file and
+        // must never overflow their fixed-size destination buffers. Use a
+        // length-bounded copy with explicit NUL termination (truncates on
+        // over-long input instead of overflowing the heap-allocated struct).
         flipper_format_read_string(ff, "Cardholder name", temp_str);
-        strcpy(app->cardholder_name, furi_string_get_cstr(temp_str));
+        strncpy(
+            app->cardholder_name,
+            furi_string_get_cstr(temp_str),
+            sizeof(app->cardholder_name) - 1);
+        app->cardholder_name[sizeof(app->cardholder_name) - 1] = '\0';
 
         flipper_format_read_string(ff, "Application name", temp_str);
-        strcpy(app->application_name, furi_string_get_cstr(temp_str));
+        strncpy(
+            app->application_name,
+            furi_string_get_cstr(temp_str),
+            sizeof(app->application_name) - 1);
+        app->application_name[sizeof(app->application_name) - 1] = '\0';
 
         flipper_format_read_string(ff, "Application label", temp_str);
-        strcpy(app->application_label, furi_string_get_cstr(temp_str));
+        strncpy(
+            app->application_label,
+            furi_string_get_cstr(temp_str),
+            sizeof(app->application_label) - 1);
+        app->application_label[sizeof(app->application_label) - 1] = '\0';
 
         uint32_t pan_len;
         if(!flipper_format_read_uint32(ff, "PAN length", &pan_len, 1)) break;
+        // Reject malformed/malicious files: a PAN is at most sizeof(app->pan)
+        // bytes (10 = 19 BCD digits). Guards against a heap overflow write.
+        if(pan_len > sizeof(app->pan)) break;
         app->pan_len = pan_len;
 
         if(!flipper_format_read_hex(ff, "PAN", app->pan, pan_len)) break;
 
         uint32_t aid_len;
         if(!flipper_format_read_uint32(ff, "AID length", &aid_len, 1)) break;
+        // Reject malformed/malicious files: an AID is at most sizeof(app->aid)
+        // bytes (16) per EMV. Guards against a heap overflow write.
+        if(aid_len > sizeof(app->aid)) break;
         app->aid_len = aid_len;
 
         if(!flipper_format_read_hex(ff, "AID", app->aid, aid_len)) break;

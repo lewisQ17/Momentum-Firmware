@@ -141,6 +141,9 @@ bool felica_load(FelicaData* data, FlipperFormat* ff, uint32_t version) {
             if(!flipper_format_read_uint32(ff, "Blocks read", &blocks_read, 1)) break;
             data->blocks_total = (uint8_t)blocks_total;
             data->blocks_read = (uint8_t)blocks_read;
+            // Reject a file declaring more blocks than the fixed dump buffer can
+            // hold; otherwise the read loop below writes out of bounds.
+            if((size_t)data->blocks_total * sizeof(FelicaBlock) > sizeof(data->data.dump)) break;
 
             for(uint8_t i = 0; i < data->blocks_total; i++) {
                 furi_string_printf(str_data_buffer, "Block %d", i);

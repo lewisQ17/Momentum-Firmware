@@ -99,10 +99,15 @@ static void
     furi_string_printf(path, ICONS_FMT ".bmx", momentum_settings.asset_pack, name);
     if(storage_file_open(file, furi_string_get_cstr(path), FSAM_READ, FSOM_OPEN_EXISTING)) {
         StaticIconBmxHeader header;
-        uint64_t frame_size = storage_file_size(file) - sizeof(header);
+        // A valid .bmx holds at least the header; a shorter (corrupt) file would
+        // underflow frame_size into a huge malloc, so treat it as no frame data
+        // and let the read guard below reject it (keeping the built-in icon).
+        uint64_t file_size = storage_file_size(file);
+        uint64_t frame_size = (file_size >= sizeof(header)) ? (file_size - sizeof(header)) : 0;
         StaticIconSwap* swap = malloc(sizeof(StaticIconSwap) + frame_size);
 
-        if(storage_file_read(file, &header, sizeof(header)) == sizeof(header) &&
+        if(file_size >= sizeof(header) &&
+           storage_file_read(file, &header, sizeof(header)) == sizeof(header) &&
            storage_file_read(file, swap->frame, frame_size) == frame_size) {
             FURI_CONST_ASSIGN(swap->icon.width, header.width);
             FURI_CONST_ASSIGN(swap->icon.height, header.height);

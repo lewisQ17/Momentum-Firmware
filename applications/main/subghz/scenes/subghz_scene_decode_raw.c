@@ -160,6 +160,9 @@ bool subghz_scene_decode_raw_start(SubGhz* subghz) {
 
         if(!success) {
             subghz_file_encoder_worker_free(subghz->decode_raw_file_worker_encoder);
+            // NULL the pointer so a later Back event (which frees it again) does
+            // not double-free / use-after-free the dangling worker.
+            subghz->decode_raw_file_worker_encoder = NULL;
         }
     }
 
@@ -269,10 +272,16 @@ bool subghz_scene_decode_raw_on_event(void* context, SceneManagerEvent event) {
 
             subghz_txrx_set_rx_callback(subghz->txrx, NULL, subghz);
 
-            if(subghz_file_encoder_worker_is_running(subghz->decode_raw_file_worker_encoder)) {
-                subghz_file_encoder_worker_stop(subghz->decode_raw_file_worker_encoder);
+            // Guard against a failed start() that already freed the worker and
+            // left the pointer dangling (would otherwise use-after-free here).
+            if(subghz->decode_raw_file_worker_encoder) {
+                if(subghz_file_encoder_worker_is_running(
+                       subghz->decode_raw_file_worker_encoder)) {
+                    subghz_file_encoder_worker_stop(subghz->decode_raw_file_worker_encoder);
+                }
+                subghz_file_encoder_worker_free(subghz->decode_raw_file_worker_encoder);
+                subghz->decode_raw_file_worker_encoder = NULL;
             }
-            subghz_file_encoder_worker_free(subghz->decode_raw_file_worker_encoder);
 
             subghz->state_notifications = SubGhzNotificationStateIDLE;
             scene_manager_set_scene_state(

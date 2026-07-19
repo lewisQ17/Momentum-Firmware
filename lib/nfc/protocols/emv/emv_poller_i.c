@@ -77,6 +77,18 @@ static void emv_trace(EmvPoller* instance, const char* message) {
     }
 }
 
+// Copy at most `cap` bytes from a card-supplied TLV value into a fixed-size
+// destination, returning the number of bytes actually written. `tlen` comes
+// straight off the card (attacker-controllable), so every copy into a fixed
+// buffer must be clamped to the destination capacity to avoid buffer overflows.
+// For a well-formed card tlen is always <= cap, so this is a no-op there.
+static inline uint8_t
+    emv_tlv_copy_clamped(void* dst, const uint8_t* src, uint8_t tlen, uint8_t cap) {
+    uint8_t n = (tlen < cap) ? tlen : cap;
+    memcpy(dst, src, n);
+    return n;
+}
+
 static bool
     emv_decode_tlv_tag(const uint8_t* buff, uint16_t tag, uint8_t tlen, EmvApplication* app) {
     uint8_t i = 0;
@@ -84,61 +96,66 @@ static bool
 
     switch(tag) {
     case EMV_TAG_LOG_FMT:
-        furi_check(tlen < sizeof(app->log_fmt));
-        memcpy(app->log_fmt, &buff[i], tlen);
-        app->log_fmt_len = tlen;
+        app->log_fmt_len =
+            emv_tlv_copy_clamped(app->log_fmt, &buff[i], tlen, sizeof(app->log_fmt));
         success = true;
-        FURI_LOG_T(TAG, "found EMV_TAG_LOG_FMT %X: len %d", tag, tlen);
+        FURI_LOG_T(TAG, "found EMV_TAG_LOG_FMT %X: len %d", tag, app->log_fmt_len);
         break;
     case EMV_TAG_GPO_FMT1:
-        // skip AIP
+        // First 2 bytes are the AIP, the remainder is the AFL. Guard against a
+        // short (malicious) value that would underflow the uint8_t length.
+        if(tlen < 2) break;
         i += 2;
         tlen -= 2;
-        furi_check(tlen < sizeof(app->afl.data));
-        memcpy(app->afl.data, &buff[i], tlen);
-        app->afl.size = tlen;
+        app->afl.size = emv_tlv_copy_clamped(app->afl.data, &buff[i], tlen, sizeof(app->afl.data));
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_GPO_FMT1 %X: ", tag);
         break;
     case EMV_TAG_AID:
-        app->aid_len = tlen;
-        memcpy(app->aid, &buff[i], tlen);
+        app->aid_len = emv_tlv_copy_clamped(app->aid, &buff[i], tlen, sizeof(app->aid));
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_AID %X: ", tag);
-        for(size_t x = 0; x < tlen; x++) {
+        for(size_t x = 0; x < app->aid_len; x++) {
             FURI_LOG_RAW_T("%02X ", app->aid[x]);
         }
         FURI_LOG_RAW_T("\r\n");
         break;
     case EMV_TAG_PRIORITY:
-        memcpy(&app->priority, &buff[i], tlen);
+        emv_tlv_copy_clamped(&app->priority, &buff[i], tlen, sizeof(app->priority));
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_APP_PRIORITY %X: %d", tag, app->priority);
         break;
     case EMV_TAG_APPL_INTERCHANGE_PROFILE:
-        furi_check(tlen == 2);
-        memcpy(app->application_interchange_profile, &buff[i], tlen);
+        emv_tlv_copy_clamped(
+            app->application_interchange_profile,
+            &buff[i],
+            tlen,
+            sizeof(app->application_interchange_profile));
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_APPL_INTERCHANGE_PROFILE %x: ", tag);
-        for(size_t x = 0; x < tlen; x++) {
+        for(size_t x = 0; x < sizeof(app->application_interchange_profile); x++) {
             FURI_LOG_RAW_T("%02X ", app->application_interchange_profile[x]);
         }
         FURI_LOG_RAW_T("\r\n");
         break;
-    case EMV_TAG_APPL_LABEL:
-        memcpy(app->application_label, &buff[i], tlen);
-        app->application_label[tlen] = '\0';
+    case EMV_TAG_APPL_LABEL: {
+        uint8_t n = emv_tlv_copy_clamped(
+            app->application_label, &buff[i], tlen, sizeof(app->application_label) - 1);
+        app->application_label[n] = '\0';
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_APPL_LABEL %x: %s", tag, app->application_label);
         break;
-    case EMV_TAG_APPL_NAME:
-        furi_check(tlen < sizeof(app->application_name));
-        memcpy(app->application_name, &buff[i], tlen);
-        app->application_name[tlen] = '\0';
+    }
+    case EMV_TAG_APPL_NAME: {
+        uint8_t n = emv_tlv_copy_clamped(
+            app->application_name, &buff[i], tlen, sizeof(app->application_name) - 1);
+        app->application_name[n] = '\0';
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_APPL_NAME %x: %s", tag, app->application_name);
         break;
+    }
     case EMV_TAG_APPL_EFFECTIVE:
+        if(tlen < 3) break;
         app->effective_year = buff[i];
         app->effective_month = buff[i + 1];
         app->effective_day = buff[i + 2];
@@ -146,23 +163,22 @@ static bool
         FURI_LOG_T(TAG, "found EMV_TAG_APPL_ISSUE %x:", tag);
         break;
     case EMV_TAG_PDOL:
-        memcpy(app->pdol.data, &buff[i], tlen);
-        app->pdol.size = tlen;
+        app->pdol.size = emv_tlv_copy_clamped(app->pdol.data, &buff[i], tlen, sizeof(app->pdol.data));
         success = true;
-        FURI_LOG_T(TAG, "found EMV_TAG_PDOL %x (len=%d)", tag, tlen);
+        FURI_LOG_T(TAG, "found EMV_TAG_PDOL %x (len=%d)", tag, app->pdol.size);
         break;
     case EMV_TAG_AFL:
-        memcpy(app->afl.data, &buff[i], tlen);
-        app->afl.size = tlen;
+        app->afl.size = emv_tlv_copy_clamped(app->afl.data, &buff[i], tlen, sizeof(app->afl.data));
         success = true;
-        FURI_LOG_T(TAG, "found EMV_TAG_AFL %x (len=%d)", tag, tlen);
+        FURI_LOG_T(TAG, "found EMV_TAG_AFL %x (len=%d)", tag, app->afl.size);
         break;
     // Tracks data https://murdoch.is/papers/defcon20emvdecode.pdf
     case EMV_TAG_TRACK_1_EQUIV: {
-        // Contain PAN and expire date
+        // Contains PAN and expiry date (used only for a trace log here)
         char track_1_equiv[80];
-        memcpy(track_1_equiv, &buff[i], tlen);
-        track_1_equiv[tlen] = '\0';
+        uint8_t n =
+            emv_tlv_copy_clamped(track_1_equiv, &buff[i], tlen, sizeof(track_1_equiv) - 1);
+        track_1_equiv[n] = '\0';
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_TRACK_1_EQUIV %x : %s", tag, track_1_equiv);
         break;
@@ -170,21 +186,26 @@ static bool
     case EMV_TAG_TRACK_2_DATA:
     case EMV_TAG_TRACK_2_EQUIV: {
         FURI_LOG_T(TAG, "found EMV_TAG_TRACK_2 %X", tag);
-        // 0xD0 delimits PAN from expiry (YYMM)
-        for(int x = 1; x < tlen; x++) {
+        // 0xD0 delimits PAN from expiry (YYMM). Only search where the 3 expiry
+        // bytes that follow the delimiter still fit inside the value field, and
+        // clamp the PAN copy to the fixed pan[] buffer.
+        for(int x = 1; x + 3 < tlen; x++) {
             if(buff[i + x + 1] > 0xD0) {
-                memcpy(app->pan, &buff[i], x + 1);
-                app->pan_len = x + 1;
+                uint8_t pan_bytes = (uint8_t)(x + 1);
+                if(pan_bytes > sizeof(app->pan)) pan_bytes = sizeof(app->pan);
+                memcpy(app->pan, &buff[i], pan_bytes);
+                app->pan_len = pan_bytes;
                 app->exp_year = (buff[i + x + 1] << 4) | (buff[i + x + 2] >> 4);
                 app->exp_month = (buff[i + x + 2] << 4) | (buff[i + x + 3] >> 4);
                 break;
             }
         }
 
-        // Convert 4-bit to ASCII representation
+        // Convert 4-bit to ASCII representation, bounded to track_2_equiv[]
         char track_2_equiv[41];
         uint8_t track_2_equiv_len = 0;
         for(int x = 0; x < tlen; x++) {
+            if((size_t)(x * 2 + 1) >= sizeof(track_2_equiv) - 1) break;
             char top = (buff[i + x] >> 4) + '0';
             char bottom = (buff[i + x] & 0x0F) + '0';
             track_2_equiv[x * 2] = top;
@@ -200,14 +221,14 @@ static bool
         break;
     }
     case EMV_TAG_CARDHOLDER_NAME: {
-        if(strlen(app->cardholder_name) > tlen) break;
-        memcpy(app->cardholder_name, &buff[i], tlen);
-        app->cardholder_name[tlen] = '\0';
+        uint8_t n = emv_tlv_copy_clamped(
+            app->cardholder_name, &buff[i], tlen, sizeof(app->cardholder_name) - 1);
+        app->cardholder_name[n] = '\0';
 
         // use space char as terminator
-        for(size_t i = 0; i < tlen; i++)
-            if(app->cardholder_name[i] == 0x20) {
-                app->cardholder_name[i] = '\0';
+        for(size_t k = 0; k < n; k++)
+            if(app->cardholder_name[k] == 0x20) {
+                app->cardholder_name[k] = '\0';
                 break;
             }
 
@@ -216,12 +237,12 @@ static bool
         break;
     }
     case EMV_TAG_PAN:
-        memcpy(app->pan, &buff[i], tlen);
-        app->pan_len = tlen;
+        app->pan_len = emv_tlv_copy_clamped(app->pan, &buff[i], tlen, sizeof(app->pan));
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_PAN %x", tag);
         break;
     case EMV_TAG_EXP_DATE:
+        if(tlen < 3) break;
         app->exp_year = buff[i];
         app->exp_month = buff[i + 1];
         app->exp_day = buff[i + 2];
@@ -229,16 +250,19 @@ static bool
         FURI_LOG_T(TAG, "found EMV_TAG_EXP_DATE %x", tag);
         break;
     case EMV_TAG_CURRENCY_CODE:
+        if(tlen < 2) break;
         app->currency_code = (buff[i] << 8 | buff[i + 1]);
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_CURRENCY_CODE %x", tag);
         break;
     case EMV_TAG_COUNTRY_CODE:
+        if(tlen < 2) break;
         app->country_code = (buff[i] << 8 | buff[i + 1]);
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_COUNTRY_CODE %x", tag);
         break;
     case EMV_TAG_LOG_ENTRY:
+        if(tlen < 2) break;
         app->log_sfi = buff[i];
         app->log_records = buff[i + 1];
         success = true;
@@ -250,37 +274,61 @@ static bool
             app->log_records);
         break;
     case EMV_TAG_LAST_ONLINE_ATC:
+        if(tlen < 2) break;
         app->last_online_atc = (buff[i] << 8 | buff[i + 1]);
         success = true;
         break;
     case EMV_TAG_ATC:
-        if(app->saving_trans_list)
-            app->trans[app->active_tr].atc = (buff[i] << 8 | buff[i + 1]);
-        else
+        if(tlen < 2) break;
+        if(app->saving_trans_list) {
+            if(app->active_tr < COUNT_OF(app->trans))
+                app->trans[app->active_tr].atc = (buff[i] << 8 | buff[i + 1]);
+        } else {
             app->transaction_counter = (buff[i] << 8 | buff[i + 1]);
+        }
         success = true;
         break;
     case EMV_TAG_LOG_AMOUNT:
-        memcpy(&app->trans[app->active_tr].amount, &buff[i], tlen);
+        if(app->active_tr < COUNT_OF(app->trans))
+            emv_tlv_copy_clamped(
+                &app->trans[app->active_tr].amount,
+                &buff[i],
+                tlen,
+                sizeof(app->trans[app->active_tr].amount));
         success = true;
         break;
     case EMV_TAG_LOG_COUNTRY:
-        app->trans[app->active_tr].country = (buff[i] << 8 | buff[i + 1]);
+        if(tlen < 2) break;
+        if(app->active_tr < COUNT_OF(app->trans))
+            app->trans[app->active_tr].country = (buff[i] << 8 | buff[i + 1]);
         success = true;
         break;
     case EMV_TAG_LOG_CURRENCY:
-        app->trans[app->active_tr].currency = (buff[i] << 8 | buff[i + 1]);
+        if(tlen < 2) break;
+        if(app->active_tr < COUNT_OF(app->trans))
+            app->trans[app->active_tr].currency = (buff[i] << 8 | buff[i + 1]);
         success = true;
         break;
     case EMV_TAG_LOG_DATE:
-        memcpy(&app->trans[app->active_tr].date, &buff[i], tlen);
+        if(app->active_tr < COUNT_OF(app->trans))
+            emv_tlv_copy_clamped(
+                &app->trans[app->active_tr].date,
+                &buff[i],
+                tlen,
+                sizeof(app->trans[app->active_tr].date));
         success = true;
         break;
     case EMV_TAG_LOG_TIME:
-        memcpy(&app->trans[app->active_tr].time, &buff[i], tlen);
+        if(app->active_tr < COUNT_OF(app->trans))
+            emv_tlv_copy_clamped(
+                &app->trans[app->active_tr].time,
+                &buff[i],
+                tlen,
+                sizeof(app->trans[app->active_tr].time));
         success = true;
         break;
     case EMV_TAG_PIN_TRY_COUNTER:
+        if(tlen < 1) break;
         app->pin_try_counter = buff[i];
         success = true;
         FURI_LOG_T(TAG, "found EMV_TAG_PIN_TRY_COUNTER %x: %d", tag, app->pin_try_counter);
@@ -370,6 +418,8 @@ static bool emv_decode_tl(
     while(f < fmt_len && i < len) {
         success = emv_parse_tag(fmt, fmt_len, &tag, &tlen, &f);
         if(!success) return success;
+        // The values live in buff (len); don't read a value past its end.
+        if((size_t)i + tlen > len) break;
         emv_decode_tlv_tag(&buff[i], tag, tlen, app);
         i += tlen;
     }
@@ -389,6 +439,10 @@ static bool emv_decode_response_tlv(const uint8_t* buff, uint8_t len, EmvApplica
 
         success = emv_parse_tag(buff, len, &tag, &tlen, &i);
         if(!success) return success;
+
+        // Reject a TLV whose declared value length runs past the response
+        // buffer (malformed/malicious card) before reading it.
+        if((size_t)i + tlen > len) break;
 
         if((first_byte & 32) == 32) { // "Constructed" -- contains more TLV data to parse
             FURI_LOG_T(TAG, "Constructed TLV %x", tag);
