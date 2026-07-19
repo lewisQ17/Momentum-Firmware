@@ -45,6 +45,7 @@ typedef struct {
     float rssi;
     uint32_t history_frequency[MAX_HISTORY];
     uint8_t history_frequency_rx_count[MAX_HISTORY];
+    float history_rssi[MAX_HISTORY]; // Peak RSSI (dBm) per history frequency
     bool signal;
     float rssi_last;
     float trigger;
@@ -140,11 +141,10 @@ static void subghz_frequency_analyzer_history_frequency_draw(
         } else {
             canvas_draw_str(canvas, current_x, current_y, "---.---");
         }
-        if(model->history_frequency_rx_count[i] > 0) {
-            snprintf(buffer, sizeof(buffer), "x%d", model->history_frequency_rx_count[i]);
+        if(model->history_frequency[i]) {
+            // Show peak RSSI (dBm) seen on this frequency
+            snprintf(buffer, sizeof(buffer), "%d", (int)model->history_rssi[i]);
             canvas_draw_str(canvas, current_x + 41, current_y, buffer);
-        } else {
-            canvas_draw_str(canvas, current_x + 41, current_y, "MHz");
         }
 
         if(show_frame && i == model->selected_index) {
@@ -167,6 +167,13 @@ void subghz_frequency_analyzer_draw(Canvas* canvas, SubGhzFrequencyAnalyzerModel
     canvas_draw_str(canvas, 33, 62, "RSSI");
     subghz_frequency_analyzer_draw_rssi(
         canvas, model->rssi, model->rssi_last, model->trigger, 56, 57);
+
+    // Numeric RSSI readout in dBm (live value, else last peak)
+    float rssi_dbm = !float_is_equal(model->rssi, 0.f) ? model->rssi : model->rssi_last;
+    if(!float_is_equal(rssi_dbm, 0.f)) {
+        snprintf(buffer, sizeof(buffer), "%d dBm", (int)rssi_dbm);
+        canvas_draw_str(canvas, 90, 62, buffer);
+    }
 
     // Last detected frequency
     subghz_frequency_analyzer_history_frequency_draw(canvas, model);
@@ -368,6 +375,7 @@ void subghz_frequency_analyzer_pair_callback(
                         if(i > 0) {
                             size_t offset = 0;
                             uint8_t temp_rx_count = model->history_frequency_rx_count[i];
+                            float temp_rssi = model->history_rssi[i];
 
                             for(size_t j = MAX_HISTORY - 1; j > 0; j--) {
                                 if(j == i) {
@@ -376,10 +384,15 @@ void subghz_frequency_analyzer_pair_callback(
                                 model->history_frequency[j] = model->history_frequency[j - offset];
                                 model->history_frequency_rx_count[j] =
                                     model->history_frequency_rx_count[j - offset];
+                                model->history_rssi[j] = model->history_rssi[j - offset];
                             }
                             model->history_frequency[0] = normal_frequency;
                             model->history_frequency_rx_count[0] = temp_rx_count;
+                            model->history_rssi[0] = temp_rssi;
                         }
+
+                        // Record the latest peak RSSI (dBm) for this frequency
+                        model->history_rssi[0] = instance->rssi_last;
 
                         break;
                     }
@@ -395,6 +408,11 @@ void subghz_frequency_analyzer_pair_callback(
                     model->history_frequency_rx_count[2] = model->history_frequency_rx_count[1];
                     model->history_frequency_rx_count[1] = model->history_frequency_rx_count[0];
                     model->history_frequency_rx_count[0] = 0;
+
+                    model->history_rssi[3] = model->history_rssi[2];
+                    model->history_rssi[2] = model->history_rssi[1];
+                    model->history_rssi[1] = model->history_rssi[0];
+                    model->history_rssi[0] = instance->rssi_last;
                 }
 
                 if(max_index < MAX_HISTORY) {
@@ -480,6 +498,10 @@ void subghz_frequency_analyzer_enter(void* context) {
             model->history_frequency_rx_count[2] = 0;
             model->history_frequency_rx_count[1] = 0;
             model->history_frequency_rx_count[0] = 0;
+            model->history_rssi[3] = 0;
+            model->history_rssi[2] = 0;
+            model->history_rssi[1] = 0;
+            model->history_rssi[0] = 0;
             model->frequency_to_save = 0;
             model->trigger = RSSI_MIN;
             model->is_ext_radio =
