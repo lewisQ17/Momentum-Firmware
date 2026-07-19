@@ -126,6 +126,10 @@ static bool
         FURI_LOG_T(TAG, "found EMV_TAG_APP_PRIORITY %X: %d", tag, app->priority);
         break;
     case EMV_TAG_APPL_INTERCHANGE_PROFILE:
+        // AIP is exactly 2 bytes and is used without a length field, so reject a
+        // short value rather than leaving application_interchange_profile[1] as
+        // uninitialized/stale heap data (EmvApplication is malloc'd, not zeroed).
+        if(tlen != sizeof(app->application_interchange_profile)) break;
         emv_tlv_copy_clamped(
             app->application_interchange_profile,
             &buff[i],
