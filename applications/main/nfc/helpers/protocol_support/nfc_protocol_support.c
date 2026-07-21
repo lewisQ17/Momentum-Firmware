@@ -374,6 +374,31 @@ static void nfc_protocol_support_scene_read_on_exit(NfcApp* instance) {
 }
 
 // SceneReadMenu
+// Turn the currently-read/loaded card into a bare-UID Iso14443-3A card so it can
+// be saved as a small, portable UID-only .nfc (one-tap badge capture). Gated on
+// NfcProtocolFeatureEmulateUid, whose members are all 4/7/10-byte NFC-A cards, so
+// iso14443_3a_set_uid always succeeds. Mirrors the set_uid/set_atqa edit scenes.
+static void nfc_protocol_support_save_as_uid(NfcApp* instance) {
+    size_t uid_len = 0;
+    const uint8_t* uid = nfc_device_get_uid(instance->nfc_device, &uid_len);
+    if(uid_len != 4 && uid_len != 7 && uid_len != 10) return;
+
+    Iso14443_3aData* data = instance->iso14443_3a_edit_data;
+    iso14443_3a_reset(data);
+    iso14443_3a_set_uid(data, uid, uid_len);
+    if(uid_len == 4) {
+        const uint8_t atqa[2] = {0x04, 0x00};
+        iso14443_3a_set_atqa(data, atqa);
+        iso14443_3a_set_sak(data, 0x08);
+    } else {
+        const uint8_t atqa[2] = {0x44, 0x00};
+        iso14443_3a_set_atqa(data, atqa);
+        iso14443_3a_set_sak(data, 0x00);
+    }
+    nfc_device_set_data(instance->nfc_device, NfcProtocolIso14443_3a, data);
+    furi_string_reset(instance->file_name); // force a fresh auto-name in SaveName
+}
+
 static void nfc_protocol_support_scene_read_menu_on_enter(NfcApp* instance) {
     const NfcProtocol protocol = nfc_device_get_protocol(instance->nfc_device);
 
@@ -421,6 +446,15 @@ static void nfc_protocol_support_scene_read_menu_on_enter(NfcApp* instance) {
             instance);
     }
 
+    if(nfc_protocol_support_has_feature(protocol, instance, NfcProtocolFeatureEmulateUid)) {
+        submenu_add_item(
+            submenu,
+            "Save as UID-only",
+            SubmenuIndexCommonSaveUid,
+            nfc_protocol_support_common_submenu_callback,
+            instance);
+    }
+
     nfc_protocol_support_get(protocol, instance)->scene_read_menu.on_enter(instance);
 
     submenu_add_item(
@@ -460,6 +494,10 @@ static bool
             consumed = true;
         } else if(event.event == SubmenuIndexCommonEdit) {
             scene_manager_next_scene(instance->scene_manager, NfcSceneSetUid);
+            consumed = true;
+        } else if(event.event == SubmenuIndexCommonSaveUid) {
+            nfc_protocol_support_save_as_uid(instance);
+            scene_manager_next_scene(instance->scene_manager, NfcSceneSaveName);
             consumed = true;
         } else {
             const NfcProtocol protocol = nfc_device_get_protocol(instance->nfc_device);
