@@ -193,6 +193,7 @@ void asset_packs_init(void) {
     if(storage_common_stat(storage, furi_string_get_cstr(p), &info) == FSE_OK &&
        info.flags & FSF_DIRECTORY) {
         asset_packs = malloc(sizeof(AssetPacks));
+        memset(asset_packs, 0, sizeof(AssetPacks));
         IconSwapList_init(asset_packs->icons);
 
         File* f = storage_file_alloc(storage);

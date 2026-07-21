@@ -16,6 +16,9 @@ struct SubGhzReceiver {
     SubGhzProtocolFlag filter;
     SubGhzProtocolFilter ignore_filter;
 
+    SubGhzProtocolEncoderBase** active_slots;
+    size_t active_count;
+
     SubGhzReceiverCallback callback;
     void* context;
 };
@@ -36,6 +39,12 @@ SubGhzReceiver* subghz_receiver_alloc_init(SubGhzEnvironment* environment) {
         }
     }
 
+    instance->active_slots = malloc(
+        SubGhzReceiverSlotArray_size(instance->slots) * sizeof(SubGhzProtocolEncoderBase*));
+    instance->active_count = 0;
+    instance->filter = (SubGhzProtocolFlag)0;
+    instance->ignore_filter = (SubGhzProtocolFilter)0;
+
     instance->callback = NULL;
     instance->context = NULL;
     return instance;
@@ -55,6 +64,7 @@ void subghz_receiver_free(SubGhzReceiver* instance) {
         }
     SubGhzReceiverSlotArray_clear(instance->slots);
 
+    free(instance->active_slots);
     free(instance);
 }
 
@@ -62,13 +72,11 @@ void subghz_receiver_decode(SubGhzReceiver* instance, bool level, uint32_t durat
     furi_check(instance);
     furi_check(instance->slots);
 
-    for
-        M_EACH(slot, instance->slots, SubGhzReceiverSlotArray_t) {
-            if((slot->base->protocol->flag & instance->filter) != 0 &&
-               (slot->base->protocol->filter & instance->ignore_filter) == 0) {
-                slot->base->protocol->decoder->feed(slot->base, level, duration);
-            }
-        }
+    SubGhzProtocolEncoderBase* const* active = instance->active_slots;
+    const size_t count = instance->active_count;
+    for(size_t i = 0; i < count; ++i) {
+        active[i]->protocol->decoder->feed(active[i], level, duration);
+    }
 }
 
 void subghz_receiver_reset(SubGhzReceiver* instance) {
@@ -104,9 +112,22 @@ void subghz_receiver_set_rx_callback(
     instance->context = context;
 }
 
+static void subghz_receiver_rebuild_active_slots(SubGhzReceiver* instance) {
+    size_t count = 0;
+    for
+        M_EACH(slot, instance->slots, SubGhzReceiverSlotArray_t) {
+            if((slot->base->protocol->flag & instance->filter) != 0 &&
+               (slot->base->protocol->filter & instance->ignore_filter) == 0) {
+                instance->active_slots[count++] = slot->base;
+            }
+        }
+    instance->active_count = count; // count written last: readers never see count > valid entries
+}
+
 void subghz_receiver_set_filter(SubGhzReceiver* instance, SubGhzProtocolFlag filter) {
     furi_check(instance);
     instance->filter = filter;
+    subghz_receiver_rebuild_active_slots(instance);
 }
 
 void subghz_receiver_set_ignore_filter(
@@ -114,6 +135,7 @@ void subghz_receiver_set_ignore_filter(
     SubGhzProtocolFilter ignore_filter) {
     furi_assert(instance);
     instance->ignore_filter = ignore_filter;
+    subghz_receiver_rebuild_active_slots(instance);
 }
 
 SubGhzProtocolDecoderBase* subghz_receiver_search_decoder_base_by_name(

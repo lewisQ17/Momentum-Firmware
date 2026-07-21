@@ -8,6 +8,35 @@
 #include <gui/modules/file_browser_worker.h>
 #include <flipper_application/flipper_application.h>
 
+const char* const known_ext[ArchiveFileTypeAppOrJs + 1] = {
+    // clang-format off
+    [ArchiveFileTypeIButton] = ".ibtn",
+    [ArchiveFileTypeNFC] = ".nfc",
+    [ArchiveFileTypeSubGhz] = ".sub",
+    [ArchiveFileTypeLFRFID] = ".rfid",
+    [ArchiveFileTypeInfrared] = ".ir",
+    [ArchiveFileTypeSubghzPlaylist] = ".txt",
+    [ArchiveFileTypeSubghzRemote] = ".txt",
+    [ArchiveFileTypeInfraredRemote] = ".txt",
+    [ArchiveFileTypeBadUsb] = ".txt",
+    [ArchiveFileTypeWAV] = ".wav",
+    [ArchiveFileTypeMag] = ".mag",
+    [ArchiveFileTypeCrossRemote] = ".xr",
+    [ArchiveFileTypePicopass] = ".picopass",
+    [ArchiveFileTypeU2f] = "?",
+    [ArchiveFileTypeApplication] = ".fap",
+    [ArchiveFileTypeJS] = ".js",
+    [ArchiveFileTypeSearch] = "*",
+    [ArchiveFileTypeUpdateManifest] = ".fuf",
+    [ArchiveFileTypeDiskImage] = ".img",
+    [ArchiveFileTypeFolder] = "?",
+    [ArchiveFileTypeProtoPirate] = ".psf",
+    [ArchiveFileTypeUnknown] = "*",
+    [ArchiveFileTypeAppOrJs] = ".fap|.js",
+    [ArchiveFileTypeSetting] = "?",
+    // clang-format on
+};
+
 static void
     archive_folder_open_cb(void* context, uint32_t item_cnt, int32_t file_idx, bool is_root) {
     furi_assert(context);

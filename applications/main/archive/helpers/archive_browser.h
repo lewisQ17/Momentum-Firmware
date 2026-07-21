@@ -23,34 +23,7 @@ static const char* const tab_default_paths[] = {
     [ArchiveTabBrowser] = STORAGE_EXT_PATH_PREFIX,
 };
 
-static const char* const known_ext[] = {
-    // clang-format off
-    [ArchiveFileTypeIButton] = ".ibtn",
-    [ArchiveFileTypeNFC] = ".nfc",
-    [ArchiveFileTypeSubGhz] = ".sub",
-    [ArchiveFileTypeLFRFID] = ".rfid",
-    [ArchiveFileTypeInfrared] = ".ir",
-    [ArchiveFileTypeSubghzPlaylist] = ".txt",
-    [ArchiveFileTypeSubghzRemote] = ".txt",
-    [ArchiveFileTypeInfraredRemote] = ".txt",
-    [ArchiveFileTypeBadUsb] = ".txt",
-    [ArchiveFileTypeWAV] = ".wav",
-    [ArchiveFileTypeMag] = ".mag",
-    [ArchiveFileTypeCrossRemote] = ".xr",
-    [ArchiveFileTypePicopass] = ".picopass",
-    [ArchiveFileTypeU2f] = "?",
-    [ArchiveFileTypeApplication] = ".fap",
-    [ArchiveFileTypeJS] = ".js",
-    [ArchiveFileTypeSearch] = "*",
-    [ArchiveFileTypeUpdateManifest] = ".fuf",
-    [ArchiveFileTypeDiskImage] = ".img",
-    [ArchiveFileTypeFolder] = "?",
-    [ArchiveFileTypeProtoPirate] = ".psf",
-    [ArchiveFileTypeUnknown] = "*",
-    [ArchiveFileTypeAppOrJs] = ".fap|.js",
-    [ArchiveFileTypeSetting] = "?",
-    // clang-format on
-};
+extern const char* const known_ext[ArchiveFileTypeAppOrJs + 1];
 
 static const ArchiveFileTypeEnum known_type[] = {
     [ArchiveTabFavorites] = ArchiveFileTypeUnknown,
