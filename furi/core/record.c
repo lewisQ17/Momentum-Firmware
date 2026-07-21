@@ -121,18 +121,28 @@ void* furi_record_open(const char* name) {
 
     FuriRecordData* record_data = furi_record_data_get_or_create(name);
     record_data->holders_count++;
+    // The FuriEventFlag object is separately heap-allocated and stable; only the
+    // dict entry (record_data) can be relocated by a concurrent insert/rehash,
+    // so snapshot the flags pointer before releasing the lock and blocking.
+    FuriEventFlag* flags = record_data->flags;
 
     furi_record_unlock();
 
     // Wait for record to become ready
     furi_check(
         furi_event_flag_wait(
-            record_data->flags,
-            FURI_RECORD_FLAG_READY,
-            FuriFlagWaitAny | FuriFlagNoClear,
-            FuriWaitForever) == FURI_RECORD_FLAG_READY);
+            flags, FURI_RECORD_FLAG_READY, FuriFlagWaitAny | FuriFlagNoClear, FuriWaitForever) ==
+        FURI_RECORD_FLAG_READY);
 
-    return record_data->data;
+    // Re-fetch the entry under the lock: the dict may have been rehashed (moving
+    // FuriRecordData) while we were blocked, so the old pointer could be stale.
+    furi_record_lock();
+    record_data = furi_record_get(name);
+    furi_check(record_data);
+    void* data = record_data->data;
+    furi_record_unlock();
+
+    return data;
 }
 
 void furi_record_close(const char* name) {

@@ -534,6 +534,24 @@ size_t xPortGetFreeHeapSize(void) {
 }
 /*-----------------------------------------------------------*/
 
+/* Furi extension: usable payload size of a currently-allocated block, computed
+ * from its header exactly the way pvPortMalloc/vPortFree do. Used by realloc()
+ * to avoid copying more bytes than the old block actually holds. */
+size_t xPortGetAllocatedBlockSize(void* pv) {
+    if(pv == NULL) {
+        return 0;
+    }
+
+    uint8_t* puc = ((uint8_t*)pv) - xHeapStructSize;
+    BlockLink_t* pxLink = (void*)puc;
+
+    configASSERT(heapBLOCK_IS_ALLOCATED(pxLink) != 0);
+    configASSERT(pxLink->pxNextFreeBlock == heapPROTECT_BLOCK_POINTER(NULL));
+
+    return (pxLink->xBlockSize & ~heapBLOCK_ALLOCATED_BITMASK) - xHeapStructSize;
+}
+/*-----------------------------------------------------------*/
+
 size_t xPortGetMinimumEverFreeHeapSize(void) {
     return xMinimumEverFreeBytesRemaining;
 }

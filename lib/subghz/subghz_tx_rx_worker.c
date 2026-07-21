@@ -217,6 +217,15 @@ SubGhzTxRxWorker* subghz_tx_rx_worker_alloc(void) {
 
     instance->status = SubGhzTxRxWorkerStatusIDLE;
     instance->worker_stopping = true;
+    // malloc() does not zero: initialize every remaining field so the RX thread
+    // (started before the have-read callback is registered) never calls a garbage
+    // function pointer and the TX-not-allowed error path never uses a wild device.
+    instance->worker_running = false;
+    instance->frequency = 0;
+    instance->device = NULL;
+    instance->device_data_gpio = NULL;
+    instance->callback_have_read = NULL;
+    instance->context_have_read = NULL;
 
     return instance;
 }
