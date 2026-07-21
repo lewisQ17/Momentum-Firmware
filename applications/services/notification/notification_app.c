@@ -132,6 +132,7 @@ static void notification_reset_notification_layer(
             furi_hal_light_set(LightBacklight, app->settings.display_brightness * 0xFF);
         }
         furi_timer_start(app->display_timer, notification_settings_display_off_delay_ticks(app));
+        app->display_backlight_on = true;
     }
 }
 
@@ -186,7 +187,13 @@ static void notification_sound_off(void) {
 static void notification_display_timer(void* ctx) {
     furi_assert(ctx);
     NotificationApp* app = ctx;
+    app->display_backlight_on = false;
     notification_message(app, &sequence_display_backlight_off);
+}
+
+bool notification_is_display_backlight_on(NotificationApp* app) {
+    furi_assert(app);
+    return app->display_backlight_on;
 }
 
 // message processing

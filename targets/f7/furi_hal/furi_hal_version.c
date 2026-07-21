@@ -89,6 +89,7 @@ typedef struct {
     char name[FURI_HAL_VERSION_ARRAY_NAME_LENGTH]; /** \0 terminated name */
     char device_name[FURI_HAL_VERSION_DEVICE_NAME_LENGTH]; /** device name for special needs */
     uint8_t ble_mac[6];
+    uint8_t custom_uid[8]; /** stable zero-padded UID derived from the name */
 } FuriHalVersion;
 
 static FuriHalVersion furi_hal_version = {0};
@@ -98,7 +99,12 @@ void furi_hal_version_set_name(const char* name) {
     if(name == NULL) {
         name = version_get_custom_name(NULL);
         if(name != NULL) {
-            udn = *((uint32_t*)name);
+            // Bounded seed: a custom name shorter than 4 bytes must not be read
+            // past its heap allocation (the old *(uint32_t*) cast was an OOB read,
+            // and unaligned). Zero-pad the missing bytes.
+            uint32_t seed = 0;
+            memcpy(&seed, name, MIN(strlen(name), sizeof(seed)));
+            udn = seed;
         }
     }
     if(name != NULL && strlen(name)) {
@@ -113,6 +119,18 @@ void furi_hal_version_set_name(const char* name) {
     }
 
     furi_hal_version.device_name[0] = AD_TYPE_COMPLETE_LOCAL_NAME;
+
+    // Stable, zero-padded 8-byte UID derived from the name. Fixes
+    // furi_hal_version_uid() previously handing out the raw name string, which
+    // for a name under 8 bytes caused an OOB heap read (a per-boot-garbage UID)
+    // and a dangling pointer once the name buffer was reloaded.
+    memset(furi_hal_version.custom_uid, 0, sizeof(furi_hal_version.custom_uid));
+    if(name != NULL) {
+        memcpy(
+            furi_hal_version.custom_uid,
+            name,
+            MIN(strlen(name), sizeof(furi_hal_version.custom_uid)));
+    }
 
     // BLE Mac address
     uint32_t platform_id = FURI_HAL_VERSION_PLATFORM_ID;
@@ -315,7 +333,9 @@ const uint8_t* furi_hal_version_uid_default(void) {
 
 const uint8_t* furi_hal_version_uid(void) {
     if(version_get_custom_name(NULL) != NULL) {
-        return (const uint8_t*)&(*((uint32_t*)version_get_custom_name(NULL)));
+        // Return the stable zero-padded buffer, not a pointer into the name
+        // string (which could be shorter than furi_hal_version_uid_size()).
+        return furi_hal_version.custom_uid;
     }
     return furi_hal_version_uid_default();
 }
