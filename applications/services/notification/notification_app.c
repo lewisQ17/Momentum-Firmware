@@ -226,12 +226,17 @@ static void notification_process_notification_message(
                     &app->display,
                     notification_message->data.led.value * display_brightness_setting);
                 reset_mask |= reset_display_mask;
+                // Track the real backlight state here (the definitive on/off point).
+                // The lock screen sends backlight-off/on directly, bypassing the
+                // display-off timer, so the timer path alone leaves the flag stale.
+                app->display_backlight_on = true;
             } else {
                 reset_mask &= ~reset_display_mask;
                 notification_reset_notification_led_layer(&app->display);
                 if(furi_timer_is_running(app->display_timer)) {
                     furi_timer_stop(app->display_timer);
                 }
+                app->display_backlight_on = false;
             }
             break;
         case NotificationMessageTypeLedDisplayBacklightEnforceOn:
@@ -241,6 +246,7 @@ static void notification_process_notification_message(
                 notification_apply_internal_led_layer(
                     &app->display,
                     notification_message->data.led.value * display_brightness_setting);
+                app->display_backlight_on = true;
             }
             break;
         case NotificationMessageTypeLedDisplayBacklightEnforceAuto:
