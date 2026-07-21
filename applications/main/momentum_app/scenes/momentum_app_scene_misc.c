@@ -31,7 +31,7 @@ void momentum_app_scene_misc_on_enter(void* context) {
     item = variable_item_list_add(var_item_list, "VGM Options", 0, NULL, app);
     variable_item_set_current_value_text(item, ">");
 
-    item = variable_item_list_add(var_item_list, "Memory Info", 0, NULL, app);
+    item = variable_item_list_add(var_item_list, "System Info", 0, NULL, app);
     variable_item_set_current_value_text(item, ">");
 
     variable_item_list_add(var_item_list, "Show Momentum Intro", 0, NULL, app);
