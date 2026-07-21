@@ -180,7 +180,7 @@ static void pocsag_message_done(SubGhzProtocolDecoderPocsag* instance) {
     }
     furi_string_cat_str(instance->done_msg, " ");
 
-    furi_string_cat(instance->generic.result_msg, instance->done_msg);
+    furi_string_set(instance->generic.result_msg, instance->done_msg);
 
     // reset the state
     instance->char_bits = 0;

@@ -122,6 +122,11 @@ static bool desktop_custom_event_callback(void* context, uint32_t event) {
             animation_manager_unload_and_stall_animation(desktop->animation_manager);
         }
 
+        // The clock viewport is only composited on the desktop; stop its 1 Hz
+        // RTC-read timer while a foreground app owns the screen so we don't wake
+        // the CPU every second to update a clock that isn't drawn.
+        furi_timer_stop(desktop->update_clock_timer);
+
         desktop_auto_lock_inhibit(desktop);
         desktop->app_running = true;
 
@@ -129,6 +134,7 @@ static bool desktop_custom_event_callback(void* context, uint32_t event) {
 
     } else if(event == DesktopGlobalAfterAppFinished) {
         animation_manager_load_and_continue_animation(desktop->animation_manager);
+        desktop_clock_reconfigure(desktop); // refresh time + restart the timer if enabled
         desktop_auto_lock_arm(desktop);
         desktop->app_running = false;
 

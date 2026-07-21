@@ -214,12 +214,9 @@ static void subghz_protocol_encoder_nice_flor_s_get_upload(
     uint64_t enc_part = subghz_protocol_nice_flor_s_encrypt(decrypt, file_name);
 
     for(int i = 0; i < 16; i++) {
-        static const uint64_t loops[16] = {
-            0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
-
         uint8_t byte;
 
-        byte = btn << 4 | (0xF ^ btn ^ loops[i]);
+        byte = btn << 4 | (0xF ^ btn ^ i);
         instance->generic.data = (uint64_t)byte << 44 | enc_part;
 
         //Send header
@@ -252,7 +249,7 @@ static void subghz_protocol_encoder_nice_flor_s_get_upload(
             for(size_t i = 0; i < 7; i++) {
                 add_data[i] = (instance->generic.data >> (48 - i * 8)) & 0xFF;
             }
-            subghz_protocol_nice_one_get_data(add_data, loops[i], loops[i]);
+            subghz_protocol_nice_one_get_data(add_data, i, i);
             instance->generic.data_2 = 0;
             for(size_t j = 7; j < 10; j++) {
                 instance->generic.data_2 <<= 8;

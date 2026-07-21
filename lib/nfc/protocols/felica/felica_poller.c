@@ -129,6 +129,18 @@ NfcCommand felica_poller_state_handler_list_system(FelicaPoller* instance) {
     FelicaListSystemCodeCommandResponse* response_system_code;
     FelicaError error = felica_poller_list_system_code(instance, &response_system_code);
 
+    // On any non-None error the response pointer is left uninitialized by
+    // felica_poller_list_system_code(), so it must not be dereferenced. Timeout
+    // simply retries (state unchanged); other errors fail the read.
+    if(error != FelicaErrorNone) {
+        if(error != FelicaErrorTimeout) {
+            instance->felica_event.type = FelicaPollerEventTypeError;
+            instance->felica_event_data.error = error;
+            instance->state = FelicaPollerStateReadFailed;
+        }
+        return command;
+    }
+
     instance->systems_total = response_system_code->system_count;
     simple_array_init(instance->data->systems, instance->systems_total);
     uint8_t* system_codes = response_system_code->system_code;
@@ -139,13 +151,7 @@ NfcCommand felica_poller_state_handler_list_system(FelicaPoller* instance) {
         system->system_code_idx = i;
     }
 
-    if(error == FelicaErrorNone) {
-        instance->state = FelicaPollerStateSelectSystemIndex;
-    } else if(error != FelicaErrorTimeout) {
-        instance->felica_event.type = FelicaPollerEventTypeError;
-        instance->felica_event_data.error = error;
-        instance->state = FelicaPollerStateReadFailed;
-    }
+    instance->state = FelicaPollerStateSelectSystemIndex;
     return command;
 }
 
