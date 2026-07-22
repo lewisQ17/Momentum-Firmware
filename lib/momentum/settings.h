@@ -82,7 +82,6 @@ typedef struct {
     bool lockscreen_transparent;
     bool lockscreen_skip_animation;
     BatteryIcon battery_icon;
-    uint8_t auto_poweroff_pct; // 0 = Off (opt-in): auto power-off at/below this battery %
     bool status_icons;
     bool bar_borders;
     bool bar_background;

@@ -11,13 +11,7 @@
 
 #define TAG "Power"
 
-#define POWER_OFF_TIMEOUT_S  (90U)
 #define POWER_POLL_PERIOD_MS (1000UL)
-
-// Momentum: number of consecutive ~1s samples the battery-percentage
-// auto power-off condition must hold before shutting down. Debounces
-// fuel-gauge noise near the threshold so we never power off unexpectedly.
-#define POWER_AUTO_POWEROFF_PCT_DEBOUNCE (3U)
 
 #define POWER_VBUS_LOW_THRESHOLD   (4.0f)
 #define POWER_HEALTH_LOW_THRESHOLD (70U)
@@ -320,10 +314,15 @@ static void power_check_low_battery(Power* power) {
         return;
     }
 
+    const uint8_t timeout_s = power_off_timeout_seconds(power->settings.power_off_timeout);
+
     // Check battery charge and vbus voltage
     if((power->info.is_shutdown_requested) &&
        (power->info.voltage_vbus < POWER_VBUS_LOW_THRESHOLD) && power->show_battery_low_warning) {
         if(!power->battery_low) {
+            power->power_off_timeout = timeout_s;
+            power_off_set_variant(power->view_power_off, PowerOffVariantLowBattery);
+            power_off_set_time_left(power->view_power_off, power->power_off_timeout);
             view_holder_send_to_front(power->view_holder);
             view_holder_set_view(power->view_holder, power_off_get_view(power->view_power_off));
         }
@@ -332,7 +331,7 @@ static void power_check_low_battery(Power* power) {
         if(power->battery_low) {
             // view_dispatcher_switch_to_view(power->view_dispatcher, VIEW_NONE);
             view_holder_set_view(power->view_holder, NULL);
-            power->power_off_timeout = POWER_OFF_TIMEOUT_S;
+            power->power_off_timeout = timeout_s;
         }
         power->battery_low = false;
     }
@@ -366,6 +365,61 @@ static void power_check_battery_level_change(Power* power) {
         power->event.type = PowerEventTypeBatteryLevelChanged;
         power->event.data.battery_level = power->battery_level;
         furi_pubsub_publish(power->event_pubsub, &power->event);
+    }
+}
+
+static void power_check_auto_poweroff(Power* power) {
+    const uint8_t timeout_s = power_off_timeout_seconds(power->settings.power_off_timeout);
+
+    if(power->auto_poweroff_warning) {
+        if(power->info.is_charging) {
+            view_holder_set_view(power->view_holder, NULL);
+            power->auto_poweroff_warning = false;
+            power->power_off_timeout = timeout_s;
+            return;
+        }
+        PowerOffResponse response = power_off_get_response(power->view_power_off);
+        if(response == PowerOffResponseDefault) {
+            if(power->power_off_timeout) {
+                power_off_set_time_left(power->view_power_off, power->power_off_timeout--);
+            } else {
+                power_off(power);
+            }
+        } else if(response == PowerOffResponseOk) {
+            power_off(power);
+        } else if(response == PowerOffResponseCancel) {
+            view_holder_set_view(power->view_holder, NULL);
+            power->auto_poweroff_warning = false;
+            uint8_t next = (power->info.charge > POWER_AUTO_POWEROFF_PERCENT_STEP) ?
+                               (uint8_t)(power->info.charge - POWER_AUTO_POWEROFF_PERCENT_STEP) :
+                               0;
+            power->auto_poweroff_next_warning = next;
+            power->power_off_timeout = timeout_s;
+        }
+        return;
+    }
+
+    if(power->settings.auto_poweroff_mode != PowerAutoPoweroffModePercent) {
+        return;
+    }
+    if(!power->info.gauge_is_ok || power->settings.auto_poweroff_percent == 0) {
+        return;
+    }
+
+    if(power->info.is_charging) {
+        if(power->info.charge >= power->settings.auto_poweroff_percent) {
+            power->auto_poweroff_next_warning = power->settings.auto_poweroff_percent;
+        }
+        return;
+    }
+
+    if(power->info.charge <= power->auto_poweroff_next_warning) {
+        power->auto_poweroff_warning = true;
+        power->power_off_timeout = timeout_s;
+        power_off_set_variant(power->view_power_off, PowerOffVariantAutoPoweroff);
+        power_off_set_time_left(power->view_power_off, power->power_off_timeout);
+        view_holder_send_to_front(power->view_holder);
+        view_holder_set_view(power->view_holder, power_off_get_view(power->view_power_off));
     }
 }
 
@@ -437,6 +491,7 @@ static void power_auto_poweroff_timer_callback(void* context) {
 
 //start|restart timer and events subscription and callbacks for input events (we restart timer when user press keys)
 static void power_auto_poweroff_arm(Power* power) {
+    if(power->settings.auto_poweroff_mode != PowerAutoPoweroffModeTimer) return;
     if(power->settings.auto_poweroff_delay_ms) {
         if(power->input_events_subscription == NULL) {
             power->input_events_subscription = furi_pubsub_subscribe(
@@ -483,7 +538,8 @@ static void power_loader_callback(const void* message, void* context) {
 // apply power settings
 static void power_settings_apply(Power* power) {
     //apply auto_poweroff settings
-    if(power->settings.auto_poweroff_delay_ms && !power->app_running) {
+    if(power->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimer &&
+       power->settings.auto_poweroff_delay_ms && !power->app_running) {
         power_auto_poweroff_arm(power);
     } else if(power_is_running_auto_poweroff_timer(power)) {
         power_auto_poweroff_disarm(power);
@@ -547,11 +603,15 @@ static void power_message_callback(FuriEventLoopObject* object, void* context) {
     case PowerMessageTypeSetSettings:
         furi_assert(msg.lock);
         power->settings = *msg.csettings;
+        power->auto_poweroff_next_warning = power->settings.auto_poweroff_percent;
+        power->auto_poweroff_warning = false;
         power_settings_apply(power);
         power_settings_save(&power->settings);
         break;
     case PowerMessageTypeReloadSettings:
         power_settings_load(&power->settings);
+        power->auto_poweroff_next_warning = power->settings.auto_poweroff_percent;
+        power->auto_poweroff_warning = false;
         power_settings_apply(power);
         break;
     default:
@@ -581,29 +641,6 @@ static void power_charge_supress(Power* power) {
     }
 }
 
-// Momentum: opt-in auto power-off when the battery reaches a user-set percentage.
-// Default 0 = Off. Only acts while discharging (never on charger) and only when
-// the fuel gauge reading is valid. The condition must hold for several
-// consecutive samples (debounce) before we shut down, so momentary fuel-gauge
-// noise near the threshold can't trigger an unexpected power-off. Shutdown reuses
-// the existing power_off() path (PowerMessageTypeShutdown -> furi_hal_power_off).
-static void power_check_auto_poweroff_pct(Power* power) {
-    const uint8_t threshold = momentum_settings.auto_poweroff_pct;
-    if(threshold > 0 && power->info.gauge_is_ok && !power->info.is_charging &&
-       power->info.charge <= threshold) {
-        if(power->auto_poweroff_pct_count < POWER_AUTO_POWEROFF_PCT_DEBOUNCE) {
-            power->auto_poweroff_pct_count++;
-        }
-        if(power->auto_poweroff_pct_count >= POWER_AUTO_POWEROFF_PCT_DEBOUNCE) {
-            power_off(power);
-        }
-    } else {
-        // Condition not met (disabled, charging, bad gauge, or above threshold):
-        // reset the debounce so it must build up again from scratch.
-        power->auto_poweroff_pct_count = 0;
-    }
-}
-
 static void power_tick_callback(void* context) {
     furi_assert(context);
     Power* power = context;
@@ -618,8 +655,8 @@ static void power_tick_callback(void* context) {
     power_check_battery_level_change(power);
     // charge supress arm/disarm
     power_charge_supress(power);
-    // Momentum: opt-in battery-percentage auto power-off (default Off)
-    power_check_auto_poweroff_pct(power);
+    // auto poweroff by battery percentage arm/disarm
+    power_check_auto_poweroff(power);
     // Update battery view port
     view_port_enabled_set(
         power->battery_view_port, momentum_settings.battery_icon != BatteryIconOff);
@@ -667,6 +704,7 @@ static void power_init_settings(Power* power) {
     }
 
     power_settings_load(&power->settings);
+    power->auto_poweroff_next_warning = power->settings.auto_poweroff_percent;
     power_settings_apply(power);
     furi_record_close(RECORD_STORAGE);
     power->charge_is_supressed = false;
@@ -677,9 +715,10 @@ static Power* power_alloc(void) {
     // Pubsub
     power->event_pubsub = furi_pubsub_alloc();
     // State initialization
-    power->power_off_timeout = POWER_OFF_TIMEOUT_S;
+    power->power_off_timeout = power_off_timeout_seconds(PowerOffTimeout90);
     power->show_battery_low_warning = true;
-    power->auto_poweroff_pct_count = 0;
+    power->auto_poweroff_next_warning = 0;
+    power->auto_poweroff_warning = false;
     // Gui
     Gui* gui = furi_record_open(RECORD_GUI);
 

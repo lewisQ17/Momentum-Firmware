@@ -26,7 +26,6 @@ MomentumSettings momentum_settings = {
     .lockscreen_transparent = false, // OFF
     .lockscreen_skip_animation = false, // OFF
     .battery_icon = BatteryIconBarPercent, // Bar %
-    .auto_poweroff_pct = 0, // Off
     .status_icons = true, // ON
     .bar_borders = true, // ON
     .bar_background = false, // OFF
@@ -101,7 +100,6 @@ static const struct {
     {setting_bool(lockscreen_transparent)},
     {setting_bool(lockscreen_skip_animation)},
     {setting_enum(battery_icon, BatteryIconCount)},
-    {setting_uint(auto_poweroff_pct, 0, 20)},
     {setting_bool(status_icons)},
     {setting_bool(bar_borders)},
     {setting_bool(bar_background)},
