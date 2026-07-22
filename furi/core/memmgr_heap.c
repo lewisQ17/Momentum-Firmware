@@ -499,8 +499,12 @@ void vPortFree(void* pv) {
                     /* Check for underflow as this can occur if xBlockSize is
                      * overwritten in a heap block. */
                     if(heapSUBTRACT_WILL_UNDERFLOW(pxLink->xBlockSize, xHeapStructSize) == 0) {
+                        /* Poison with 0xDD (not 0x00) so a later use-after-free
+                         * reads 0xDDDDDDDD — an obviously-invalid pointer that
+                         * faults cleanly and is recognised by BusFault_Handler.
+                         * Dormant unless configHEAP_CLEAR_MEMORY_ON_FREE == 1. */
                         (void)memset(
-                            puc + xHeapStructSize, 0, pxLink->xBlockSize - xHeapStructSize);
+                            puc + xHeapStructSize, 0xDD, pxLink->xBlockSize - xHeapStructSize);
                     }
                 }
 #endif
