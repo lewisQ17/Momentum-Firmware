@@ -63,43 +63,23 @@ static void momentum_app_scene_misc_meminfo_update(MomentumApp* app) {
     furi_string_free(str);
 }
 
-static void momentum_app_scene_misc_meminfo_timer_callback(void* context) {
-    MomentumApp* app = context;
-    view_dispatcher_send_custom_event(app->view_dispatcher, MEMINFO_REFRESH_EVENT);
-}
-
 void momentum_app_scene_misc_meminfo_on_enter(void* context) {
     MomentumApp* app = context;
 
+    // Static snapshot: no periodic refresh, so scrolling down is not reset out
+    // from under you every second. Re-open the screen for fresh values.
     momentum_app_scene_misc_meminfo_update(app);
-
-    app->meminfo_timer = furi_timer_alloc(
-        momentum_app_scene_misc_meminfo_timer_callback, FuriTimerTypePeriodic, app);
-    furi_timer_start(app->meminfo_timer, MEMINFO_REFRESH_PERIOD);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, MomentumAppViewWidget);
 }
 
 bool momentum_app_scene_misc_meminfo_on_event(void* context, SceneManagerEvent event) {
-    MomentumApp* app = context;
-    bool consumed = false;
-
-    if(event.type == SceneManagerEventTypeCustom) {
-        if(event.event == MEMINFO_REFRESH_EVENT) {
-            momentum_app_scene_misc_meminfo_update(app);
-            consumed = true;
-        }
-    }
-
-    return consumed;
+    UNUSED(context);
+    UNUSED(event);
+    return false;
 }
 
 void momentum_app_scene_misc_meminfo_on_exit(void* context) {
     MomentumApp* app = context;
-
-    furi_timer_stop(app->meminfo_timer);
-    furi_timer_free(app->meminfo_timer);
-    app->meminfo_timer = NULL;
-
     widget_reset(app->widget);
 }
