@@ -11,7 +11,7 @@ void subghz_scene_set_type_submenu_callback(void* context, uint32_t index) {
     view_dispatcher_send_custom_event(subghz->view_dispatcher, index);
 }
 
-static const char* submenu_names[SetTypeMAX] = {
+static const char* const submenu_names[SetTypeMAX] = {
     [SetTypeFaacSLH_868] = "FAAC SLH 868MHz",
     [SetTypeFaacSLH_433] = "FAAC SLH 433MHz",
     [SetTypeBFTMitto] = "BFT Mitto 433MHz",

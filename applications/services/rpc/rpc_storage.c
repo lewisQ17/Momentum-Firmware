@@ -211,7 +211,7 @@ static void rpc_system_storage_list_root(const PB_Main* request, void* context) 
     RpcSession* session = rpc_storage->session;
     furi_assert(session);
 
-    const char* hard_coded_dirs[] = {"any", "int", "ext"};
+    static const char* const hard_coded_dirs[] = {"any", "int", "ext"};
 
     PB_Main response = {
         .has_next = false,
