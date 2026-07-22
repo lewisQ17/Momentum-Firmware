@@ -33,6 +33,11 @@ static void
 
 Updater* updater_alloc(const char* arg) {
     Updater* updater = malloc(sizeof(Updater));
+    // malloc() does not zero-init: on the LoadCfg branch below these stay
+    // indeterminate, and updater_free()'s `if(update_task)` guard would then
+    // free a garbage pointer (crash on teardown after an install-from-manifest).
+    updater->update_task = NULL;
+    updater->loaded_manifest = NULL;
     if(arg && strlen(arg)) {
         updater->startup_arg = furi_string_alloc_set(arg);
         furi_string_replace(updater->startup_arg, ANY_PATH(""), EXT_PATH(""));

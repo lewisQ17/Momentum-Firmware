@@ -56,6 +56,8 @@ struct BadUsbApp {
     BadUsbHidInterface interface;
     BadUsbHidConfig user_hid_cfg;
     BadUsbHidConfig script_hid_cfg;
+
+    uint8_t led_mode; // last LED indicator mode shown on the work screen (change-detect)
 };
 
 typedef enum {

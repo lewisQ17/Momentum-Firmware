@@ -49,6 +49,19 @@ static void mjs_load(struct mjs* mjs) {
         struct mjs_bcode_part* bp = NULL;
         mjs_err_t ret;
 
+        /* Give the loaded file its own __filename/__dirname (as the entry script
+         * gets), then restore the caller's afterwards. The saved values are owned
+         * across the exec so a GC cannot collect them. */
+        mjs_val_t global = mjs_get_global(mjs);
+        mjs_val_t saved_filename = mjs_get(mjs, global, "__filename", ~0);
+        mjs_val_t saved_dirname = mjs_get(mjs, global, "__dirname", ~0);
+        mjs_own(mjs, &saved_filename);
+        mjs_own(mjs, &saved_dirname);
+        const char* last_slash = strrchr(path, '/');
+        size_t dir_len = last_slash ? (size_t)(last_slash - path) : 0;
+        mjs_set(mjs, global, "__filename", ~0, mjs_mk_string(mjs, path, strlen(path), 1));
+        mjs_set(mjs, global, "__dirname", ~0, mjs_mk_string(mjs, path, dir_len, 1));
+
         if(mjs_is_object(arg1)) {
             custom_global = 1;
             push_mjs_val(&mjs->scopes, arg1);
@@ -87,6 +100,11 @@ static void mjs_load(struct mjs* mjs) {
         if(custom_global) {
             mjs_pop_val(&mjs->scopes);
         }
+        /* Restore the caller's __filename/__dirname. */
+        mjs_set(mjs, global, "__filename", ~0, saved_filename);
+        mjs_set(mjs, global, "__dirname", ~0, saved_dirname);
+        mjs_disown(mjs, &saved_dirname);
+        mjs_disown(mjs, &saved_filename);
     }
     mjs_return(mjs, res);
 }
