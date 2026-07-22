@@ -8,7 +8,8 @@
 
 #define POWER_SETTINGS_VER_1 (1) // Oldest version
 #define POWER_SETTINGS_VER_2 (2) // Charge-supress added
-#define POWER_SETTINGS_VER   (3) // Percentage + warning timeout added
+#define POWER_SETTINGS_VER_3 (3) // Percentage + warning timeout added
+#define POWER_SETTINGS_VER   (4) // Critical hard-floor % added
 
 #define POWER_SETTINGS_MAGIC (0x21)
 
@@ -20,6 +21,14 @@ typedef struct {
     uint32_t auto_poweroff_delay_ms;
     uint8_t charge_supress_percent;
 } PowerSettingsV2;
+
+typedef struct {
+    PowerAutoPoweroffMode auto_poweroff_mode;
+    uint32_t auto_poweroff_delay_ms;
+    uint8_t charge_supress_percent;
+    uint8_t auto_poweroff_percent;
+    PowerOffTimeout power_off_timeout;
+} PowerSettingsV3;
 
 void power_settings_load(PowerSettings* settings) {
     furi_assert(settings);
@@ -39,7 +48,26 @@ void power_settings_load(PowerSettings* settings) {
                 POWER_SETTINGS_MAGIC,
                 POWER_SETTINGS_VER);
 
-            // v2 -> v3
+            // v3 -> v4
+        } else if(version == POWER_SETTINGS_VER_3) {
+            PowerSettingsV3* prev = malloc(sizeof(PowerSettingsV3));
+            success = saved_struct_load(
+                POWER_SETTINGS_PATH,
+                prev,
+                sizeof(PowerSettingsV3),
+                POWER_SETTINGS_MAGIC,
+                POWER_SETTINGS_VER_3);
+            if(success) {
+                settings->auto_poweroff_mode = prev->auto_poweroff_mode;
+                settings->auto_poweroff_delay_ms = prev->auto_poweroff_delay_ms;
+                settings->charge_supress_percent = prev->charge_supress_percent;
+                settings->auto_poweroff_percent = prev->auto_poweroff_percent;
+                settings->power_off_timeout = prev->power_off_timeout;
+                settings->auto_poweroff_critical_percent = 0;
+            }
+            free(prev);
+
+            // v2 -> v4
         } else if(version == POWER_SETTINGS_VER_2) {
             PowerSettingsV2* prev = malloc(sizeof(PowerSettingsV2));
             success = saved_struct_load(
@@ -56,10 +84,11 @@ void power_settings_load(PowerSettings* settings) {
                 settings->charge_supress_percent = prev->charge_supress_percent;
                 settings->auto_poweroff_percent = 0;
                 settings->power_off_timeout = PowerOffTimeout90;
+                settings->auto_poweroff_critical_percent = 0;
             }
             free(prev);
 
-            // v1 -> v3
+            // v1 -> v4
         } else if(version == POWER_SETTINGS_VER_1) {
             PowerSettingsV1* prev = malloc(sizeof(PowerSettingsV1));
             success = saved_struct_load(
@@ -76,6 +105,7 @@ void power_settings_load(PowerSettings* settings) {
                 settings->charge_supress_percent = 0;
                 settings->auto_poweroff_percent = 0;
                 settings->power_off_timeout = PowerOffTimeout90;
+                settings->auto_poweroff_critical_percent = 0;
             }
             free(prev);
         }

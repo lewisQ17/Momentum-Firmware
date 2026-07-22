@@ -387,8 +387,11 @@ SubGhzProtocolStatus
     SubGhzProtocolEncoderCameAtomo* instance = context;
     SubGhzProtocolStatus res = SubGhzProtocolStatusError;
     do {
-        if(SubGhzProtocolStatusOk !=
-           subghz_block_generic_deserialize(&instance->generic, flipper_format)) {
+        // Enforce the 62-bit protocol size (mirrors the other encoders): a crafted
+        // .sub with a larger Bit count would otherwise overflow the fixed 900-entry
+        // encoder.upload buffer in get_upload().
+        if(SubGhzProtocolStatusOk != subghz_block_generic_deserialize_check_count_bit(
+                                         &instance->generic, flipper_format, 62)) {
             FURI_LOG_E(TAG, "Deserialize error");
             break;
         }

@@ -31,10 +31,11 @@ const uint32_t auto_poweroff_delay_value[AUTO_POWEROFF_DELAY_COUNT] = {
 #define AUTO_POWEROFF_PERCENT_MAX  95
 #define CHARGE_SUPRESS_STEP        5
 
-static const char* const auto_poweroff_mode_text[3] = {
+static const char* const auto_poweroff_mode_text[4] = {
     "OFF",
     "Timer",
     "%",
+    "T+%", // ours: timer AND percent, whichever fires first
 };
 
 static const char* const power_off_timeout_text[3] = {
@@ -88,6 +89,20 @@ static void power_settings_scene_start_auto_poweroff_percent_changed(VariableIte
     app->settings.auto_poweroff_percent = value;
 }
 
+// change the critical hard-floor % (0 = OFF, 1..5 %)
+static void power_settings_scene_start_critical_percent_changed(VariableItem* item) {
+    PowerSettingsApp* app = variable_item_get_context(item);
+    uint8_t index = variable_item_get_current_value_index(item); // 0..5
+    app->settings.auto_poweroff_critical_percent = index;
+    if(index == 0) {
+        variable_item_set_current_value_text(item, "OFF");
+    } else {
+        char buf[6];
+        snprintf(buf, sizeof(buf), "%u%%", index);
+        variable_item_set_current_value_text(item, buf);
+    }
+}
+
 // change variable_item_list visible text and power_off_timeout_settings when user change item in variable_item_list
 static void power_settings_scene_start_power_off_timeout_changed(VariableItem* item) {
     PowerSettingsApp* app = variable_item_get_context(item);
@@ -122,7 +137,7 @@ void power_settings_scene_start_on_enter(void* context) {
     item = variable_item_list_add(
         variable_item_list,
         "Auto PowerOff",
-        3,
+        4,
         power_settings_scene_start_auto_poweroff_mode_changed,
         app);
 
@@ -130,7 +145,8 @@ void power_settings_scene_start_on_enter(void* context) {
     variable_item_set_current_value_text(
         item, auto_poweroff_mode_text[app->settings.auto_poweroff_mode]);
 
-    if(app->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimer) {
+    if(app->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimer ||
+       app->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimerPercent) {
         item = variable_item_list_add(
             variable_item_list,
             "Duration",
@@ -144,7 +160,9 @@ void power_settings_scene_start_on_enter(void* context) {
             AUTO_POWEROFF_DELAY_COUNT);
         variable_item_set_current_value_index(item, value_index);
         variable_item_set_current_value_text(item, auto_poweroff_delay_text[value_index]);
-    } else if(app->settings.auto_poweroff_mode == PowerAutoPoweroffModePercent) {
+    }
+    if(app->settings.auto_poweroff_mode == PowerAutoPoweroffModePercent ||
+       app->settings.auto_poweroff_mode == PowerAutoPoweroffModeTimerPercent) {
         item = variable_item_list_add(
             variable_item_list,
             "Percentage",
@@ -172,6 +190,23 @@ void power_settings_scene_start_on_enter(void* context) {
     variable_item_set_current_value_index(item, app->settings.power_off_timeout);
     variable_item_set_current_value_text(
         item, power_off_timeout_text[app->settings.power_off_timeout]);
+
+    item = variable_item_list_add(
+        variable_item_list,
+        "Critical Off",
+        6, // OFF, 1%..5%
+        power_settings_scene_start_critical_percent_changed,
+        app);
+    uint8_t crit = app->settings.auto_poweroff_critical_percent;
+    if(crit > 5) crit = 5;
+    variable_item_set_current_value_index(item, crit);
+    if(crit == 0) {
+        variable_item_set_current_value_text(item, "OFF");
+    } else {
+        char crit_buf[6];
+        snprintf(crit_buf, sizeof(crit_buf), "%u%%", crit);
+        variable_item_set_current_value_text(item, crit_buf);
+    }
 
     item = variable_item_list_add(
         variable_item_list,

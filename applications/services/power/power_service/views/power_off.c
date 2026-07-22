@@ -11,6 +11,7 @@ typedef struct {
     PowerOffResponse response;
     PowerOffVariant variant;
     uint32_t time_left_sec;
+    uint32_t minutes_remaining; // estimated battery runtime left (0 = hide)
 } PowerOffModel;
 
 static void power_off_draw_callback(Canvas* canvas, void* _model) {
@@ -50,7 +51,17 @@ static void power_off_draw_callback(Canvas* canvas, void* _model) {
 
     canvas_set_font(canvas, FontSecondary);
     if(model->response == PowerOffResponseDefault) {
-        snprintf(buff, sizeof(buff), "%s\nOff in %lus", bubble_primary, model->time_left_sec);
+        if(model->minutes_remaining > 0) {
+            snprintf(
+                buff,
+                sizeof(buff),
+                "%s\nOff %lus ~%lum",
+                bubble_primary,
+                model->time_left_sec,
+                model->minutes_remaining);
+        } else {
+            snprintf(buff, sizeof(buff), "%s\nOff in %lus", bubble_primary, model->time_left_sec);
+        }
         elements_multiline_text_aligned(canvas, 70, 23, AlignLeft, AlignTop, buff);
 
         elements_button_left(canvas, "Cancel");
@@ -122,6 +133,12 @@ void power_off_set_time_left(PowerOff* power_off, uint8_t time_left) {
     furi_assert(power_off);
     with_view_model(
         power_off->view, PowerOffModel * model, { model->time_left_sec = time_left; }, true);
+}
+
+void power_off_set_runtime(PowerOff* power_off, uint32_t minutes) {
+    furi_assert(power_off);
+    with_view_model(
+        power_off->view, PowerOffModel * model, { model->minutes_remaining = minutes; }, true);
 }
 
 void power_off_set_variant(PowerOff* power_off, PowerOffVariant variant) {

@@ -7,6 +7,7 @@ typedef enum {
     PowerAutoPoweroffModeOff,
     PowerAutoPoweroffModeTimer,
     PowerAutoPoweroffModePercent,
+    PowerAutoPoweroffModeTimerPercent, // whichever fires first (ours, not upstream)
 } PowerAutoPoweroffMode;
 
 typedef enum {
@@ -23,6 +24,7 @@ typedef struct {
     uint8_t charge_supress_percent;
     uint8_t auto_poweroff_percent;
     PowerOffTimeout power_off_timeout;
+    uint8_t auto_poweroff_critical_percent; // hard-floor forced shutdown (0 = off)
 } PowerSettings;
 
 void power_settings_load(PowerSettings* settings);
