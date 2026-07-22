@@ -39,6 +39,12 @@ static void
         bool ok = storage_file_read(file, &meta, sizeof(meta)) == sizeof(meta);
         storage_file_close(file);
 
+        // frame_count comes straight from an asset-pack meta file. Bound it (as
+        // animation_storage.c does) so a crafted/huge value can't wrap the malloc
+        // size and overflow the frames[] array.
+        if(ok && (meta.frame_count <= 0 || meta.frame_count > 256)) {
+            ok = false;
+        }
         if(ok) {
             AnimatedIconSwap* swap =
                 malloc(sizeof(AnimatedIconSwap) + (sizeof(uint8_t*) * meta.frame_count));
