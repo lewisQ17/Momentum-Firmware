@@ -18,6 +18,15 @@
 
 AssetPacks* asset_packs = NULL;
 
+// Count of icons whose asset-pack files were present but could not be loaded
+// (missing/corrupt/truncated frames, bad meta, wrong dimensions). A simple
+// absent override is NOT counted. Reset at the start of each asset_packs_init.
+static uint32_t asset_packs_failed_icons = 0;
+
+uint32_t asset_packs_get_failed_count(void) {
+    return asset_packs_failed_icons;
+}
+
 typedef struct {
     Icon icon;
     uint8_t* frames[];
@@ -45,6 +54,7 @@ static void
         if(ok && (meta.frame_count <= 0 || meta.frame_count > 256)) {
             ok = false;
         }
+        bool loaded = false;
         if(ok) {
             AnimatedIconSwap* swap =
                 malloc(sizeof(AnimatedIconSwap) + (sizeof(uint8_t*) * meta.frame_count));
@@ -78,6 +88,7 @@ static void
                         .original = original,
                         .replaced = &swap->icon,
                     });
+                loaded = true;
             } else {
                 for(; i >= 0; i--) {
                     free(swap->frames[i]);
@@ -85,6 +96,10 @@ static void
                 free(swap);
             }
         }
+
+        // The meta file existed, so this icon was meant to be overridden. If we
+        // didn't manage to load it, the pack's icon is broken: count it.
+        if(!loaded) asset_packs_failed_icons++;
     }
     storage_file_close(file);
 }
@@ -129,7 +144,9 @@ static void
                     .replaced = &swap->icon,
                 });
         } else {
+            // The .bmx file existed but was too short/unreadable: broken icon.
             free(swap);
+            asset_packs_failed_icons++;
         }
     }
     storage_file_close(file);
@@ -189,6 +206,8 @@ static const char* font_names[] = {
 
 void asset_packs_init(void) {
     if(asset_packs) return;
+
+    asset_packs_failed_icons = 0;
 
     const char* pack = momentum_settings.asset_pack;
     if(pack[0] == '\0') return;

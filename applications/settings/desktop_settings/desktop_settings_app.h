@@ -42,6 +42,7 @@ extern const size_t EXTRA_KEYBINDS_COUNT;
 typedef struct {
     DesktopSettings settings;
     DesktopKeybinds keybinds;
+    DesktopKeybindSequences sequences;
 
     Gui* gui;
     DialogsApp* dialogs;
@@ -62,6 +63,13 @@ typedef struct {
     uint32_t pin_menu_idx;
 
     bool save_keybinds;
+    bool save_sequences;
+
+    // Multi-key sequence editing state
+    bool editing_sequence; // true while picking an action for a sequence slot
+    size_t seq_edit_index; // sequence slot being edited
+    uint8_t seq_edit_keys[DESKTOP_KEYBIND_SEQ_MAX_LEN]; // keys built in the editor
+    uint8_t seq_edit_len; // number of keys built so far
 } DesktopSettingsApp;
 
 FuriString* desktop_settings_app_get_keybind(DesktopSettingsApp* app);

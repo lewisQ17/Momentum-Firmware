@@ -30,12 +30,16 @@ bool desktop_settings_scene_keybinds_reset_on_event(void* context, SceneManagerE
 
     if(event.type == SceneManagerEventTypeCustom) {
         switch(event.event) {
-        case DialogExResultRight:
+        case DialogExResultRight: {
             storage_common_remove(furi_record_open(RECORD_STORAGE), DESKTOP_KEYBINDS_PATH);
             furi_record_close(RECORD_STORAGE);
-            desktop_keybinds_load(furi_record_open(RECORD_DESKTOP), &app->keybinds);
+            Desktop* desktop = furi_record_open(RECORD_DESKTOP);
+            desktop_keybinds_load(desktop, &app->keybinds);
+            desktop_keybind_sequences_load(desktop, &app->sequences);
             furi_record_close(RECORD_DESKTOP);
             app->save_keybinds = false;
+            app->save_sequences = false;
+        }
             /* fall through */
         case DialogExResultLeft:
             consumed = scene_manager_previous_scene(app->scene_manager);

@@ -100,6 +100,7 @@ typedef struct {
     bool apply_pack;
     bool show_slideshow;
     bool require_reboot;
+    char pack_warn_text[64]; // persistent backing for the asset-pack warning popup
 } MomentumApp;
 
 typedef enum {

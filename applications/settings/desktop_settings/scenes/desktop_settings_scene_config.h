@@ -4,6 +4,8 @@ ADD_SCENE(desktop_settings, keybinds_key, KeybindsKey)
 ADD_SCENE(desktop_settings, keybinds_action_type, KeybindsActionType)
 ADD_SCENE(desktop_settings, keybinds_action, KeybindsAction)
 ADD_SCENE(desktop_settings, keybinds_reset, KeybindsReset)
+ADD_SCENE(desktop_settings, keybinds_seq_list, KeybindsSeqList)
+ADD_SCENE(desktop_settings, keybinds_seq_edit, KeybindsSeqEdit)
 ADD_SCENE(desktop_settings, pin_menu, PinMenu)
 
 ADD_SCENE(desktop_settings, pin_auth, PinAuth)

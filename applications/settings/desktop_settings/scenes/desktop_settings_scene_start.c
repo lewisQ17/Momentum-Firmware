@@ -7,6 +7,7 @@
 typedef enum {
     DesktopSettingsPinSetup = 0,
     DesktopSettingsKeybindSetup,
+    DesktopSettingsKeybindSequences,
     DesktopSettingsResetKeybinds,
     DesktopSettingsAutoLockDelay,
     DesktopSettingsAutoLockPin,
@@ -97,6 +98,8 @@ void desktop_settings_scene_start_on_enter(void* context) {
 
     variable_item_list_add(variable_item_list, "Keybinds Setup", 1, NULL, NULL);
 
+    variable_item_list_add(variable_item_list, "Key Sequences", 1, NULL, NULL);
+
     variable_item_list_add(variable_item_list, "Reset Keybinds to Default", 1, NULL, NULL);
 
     item = variable_item_list_add(
@@ -167,9 +170,17 @@ bool desktop_settings_scene_start_on_event(void* context, SceneManagerEvent even
             break;
 
         case DesktopSettingsKeybindSetup:
+            app->editing_sequence = false;
             scene_manager_set_scene_state(
                 app->scene_manager, DesktopSettingsAppSceneKeybindsType, 0);
             scene_manager_next_scene(app->scene_manager, DesktopSettingsAppSceneKeybindsType);
+            consumed = true;
+            break;
+
+        case DesktopSettingsKeybindSequences:
+            app->editing_sequence = false;
+            scene_manager_next_scene(
+                app->scene_manager, DesktopSettingsAppSceneKeybindsSeqList);
             consumed = true;
             break;
 

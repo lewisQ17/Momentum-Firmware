@@ -1,4 +1,5 @@
 #include <furi.h>
+#include <string.h>
 #include <gui/modules/popup.h>
 #include <gui/modules/dialog_ex.h>
 #include <gui/scene_manager.h>
@@ -35,6 +36,9 @@ static bool desktop_settings_back_event_callback(void* context) {
 }
 
 FuriString* desktop_settings_app_get_keybind(DesktopSettingsApp* app) {
+    if(app->editing_sequence) {
+        return app->sequences[app->seq_edit_index].action;
+    }
     DesktopKeybindType type =
         scene_manager_get_scene_state(app->scene_manager, DesktopSettingsAppSceneKeybindsType);
     DesktopKeybindKey key =
@@ -43,6 +47,14 @@ FuriString* desktop_settings_app_get_keybind(DesktopSettingsApp* app) {
 }
 
 void desktop_settings_app_set_keybind(DesktopSettingsApp* app, const char* value) {
+    if(app->editing_sequence) {
+        DesktopKeybindSequence* s = &app->sequences[app->seq_edit_index];
+        s->length = app->seq_edit_len;
+        memcpy(s->keys, app->seq_edit_keys, app->seq_edit_len);
+        furi_string_set(s->action, value);
+        app->save_sequences = true;
+        return;
+    }
     DesktopKeybindType type =
         scene_manager_get_scene_state(app->scene_manager, DesktopSettingsAppSceneKeybindsType);
     DesktopKeybindKey key =
@@ -53,6 +65,13 @@ void desktop_settings_app_set_keybind(DesktopSettingsApp* app, const char* value
 
 DesktopSettingsApp* desktop_settings_app_alloc(void) {
     DesktopSettingsApp* app = malloc(sizeof(DesktopSettingsApp));
+
+    // Sequences must be zero-initialised (NULL action pointers) before first load
+    memset(app->sequences, 0, sizeof(app->sequences));
+    app->save_sequences = false;
+    app->editing_sequence = false;
+    app->seq_edit_index = 0;
+    app->seq_edit_len = 0;
 
     app->gui = furi_record_open(RECORD_GUI);
     app->dialogs = furi_record_open(RECORD_DIALOGS);
@@ -132,6 +151,7 @@ extern int32_t desktop_settings_app(void* p) {
 
     desktop_api_get_settings(desktop, &app->settings);
     desktop_keybinds_load(desktop, &app->keybinds);
+    desktop_keybind_sequences_load(desktop, &app->sequences);
 
     if(p && (strcmp(p, DESKTOP_SETTINGS_RUN_PIN_SETUP_ARG) == 0)) {
         scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinSetupHowto);
@@ -141,9 +161,10 @@ extern int32_t desktop_settings_app(void* p) {
 
     view_dispatcher_run(app->view_dispatcher);
 
-    if(app->save_keybinds) {
-        desktop_keybinds_save(desktop, &app->keybinds);
+    if(app->save_keybinds || app->save_sequences) {
+        desktop_keybinds_save_all(desktop, &app->keybinds, &app->sequences);
     }
+    desktop_keybind_sequences_free(&app->sequences);
     desktop_keybinds_free(&app->keybinds);
     desktop_api_set_settings(desktop, &app->settings);
     furi_record_close(RECORD_DESKTOP);

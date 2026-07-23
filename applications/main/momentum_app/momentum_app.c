@@ -13,6 +13,12 @@ void callback_reboot(void* context) {
     power_reboot(power, PowerBootModeNormal);
 }
 
+// Dismiss the asset-pack warning popup (on timeout or button press) and exit.
+static void momentum_app_pack_warn_exit(void* context) {
+    MomentumApp* app = context;
+    view_dispatcher_stop(app->view_dispatcher);
+}
+
 bool momentum_app_apply(MomentumApp* app) {
     if(app->save_mainmenu_apps) {
         Stream* stream = file_stream_alloc(app->storage);
@@ -142,6 +148,26 @@ bool momentum_app_apply(MomentumApp* app) {
         popup_disable_timeout(app->popup);
         view_dispatcher_switch_to_view(app->view_dispatcher, MomentumAppViewPopup);
         asset_packs_init();
+
+        // Non-fatal: the pack still loads, but warn if some icons were broken.
+        uint32_t failed = asset_packs_get_failed_count();
+        if(failed > 0) {
+            snprintf(
+                app->pack_warn_text,
+                sizeof(app->pack_warn_text),
+                "%lu icon%s failed to load.\nPack may be broken.",
+                (unsigned long)failed,
+                failed == 1 ? "" : "s");
+            popup_reset(app->popup);
+            popup_set_header(app->popup, "Asset Pack Warning", 64, 12, AlignCenter, AlignCenter);
+            popup_set_text(app->popup, app->pack_warn_text, 64, 30, AlignCenter, AlignCenter);
+            popup_set_callback(app->popup, momentum_app_pack_warn_exit);
+            popup_set_context(app->popup, app);
+            popup_set_timeout(app->popup, 3000);
+            popup_enable_timeout(app->popup);
+            view_dispatcher_switch_to_view(app->view_dispatcher, MomentumAppViewPopup);
+            return true;
+        }
     }
     return false;
 }

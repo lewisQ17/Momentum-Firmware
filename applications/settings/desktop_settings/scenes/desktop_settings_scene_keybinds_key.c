@@ -56,6 +56,7 @@ bool desktop_settings_scene_keybinds_key_on_event(void* context, SceneManagerEve
 
     if(event.type == SceneManagerEventTypeCustom) {
         consumed = true;
+        app->editing_sequence = false;
         scene_manager_set_scene_state(
             app->scene_manager, DesktopSettingsAppSceneKeybindsKey, event.event);
         scene_manager_set_scene_state(
