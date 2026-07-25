@@ -101,6 +101,9 @@ typedef struct {
     bool show_slideshow;
     bool require_reboot;
     char pack_warn_text[64]; // persistent backing for the asset-pack warning popup
+    FuriString* icon_file_path; // last path picked in the loose-icon preview browser
+    const Icon* icon_preview; // heap-owned loose icon being previewed (NULL when none)
+    char icon_info_text[32]; // persistent backing for the preview caption
 } MomentumApp;
 
 typedef enum {

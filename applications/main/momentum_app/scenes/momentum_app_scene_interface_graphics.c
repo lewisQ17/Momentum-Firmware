@@ -5,6 +5,7 @@ enum VarItemListIndex {
     VarItemListIndexAnimSpeed,
     VarItemListIndexCycleAnims,
     VarItemListIndexUnlockAnims,
+    VarItemListIndexIconPreview,
 };
 
 void momentum_app_scene_interface_graphics_var_item_list_callback(void* context, uint32_t index) {
@@ -162,6 +163,10 @@ void momentum_app_scene_interface_graphics_on_enter(void* context) {
     variable_item_set_current_value_index(item, momentum_settings.unlock_anims);
     variable_item_set_current_value_text(item, momentum_settings.unlock_anims ? "ON" : "OFF");
 
+    // Button-style row (0 values, no change callback): browse to a loose .bmx
+    // file or icon folder and preview it, exercising asset_packs_icon_load_file().
+    variable_item_list_add(var_item_list, "Preview Icon File", 0, NULL, app);
+
     variable_item_list_set_enter_callback(
         var_item_list, momentum_app_scene_interface_graphics_var_item_list_callback, app);
 
@@ -183,6 +188,44 @@ bool momentum_app_scene_interface_graphics_on_event(void* context, SceneManagerE
         switch(event.event) {
         case VarItemListIndexAssetPack:
             scene_manager_next_scene(app->scene_manager, MomentumAppSceneInterfaceGraphicsPack);
+            break;
+        case VarItemListIndexIconPreview: {
+            const DialogsFileBrowserOptions browser_options = {
+                .extension = ".bmx",
+                .icon = &I_unknown_10px,
+                .skip_assets = false,
+                .hide_ext = false,
+                .item_loader_callback = NULL,
+                .item_loader_context = NULL,
+                .base_path = STORAGE_EXT_PATH_PREFIX,
+                .select_right = true, // Right selects a folder = animated icon
+            };
+            if(dialog_file_browser_show(
+                   app->dialogs, app->icon_file_path, app->icon_file_path, &browser_options)) {
+                asset_packs_icon_free(app->icon_preview);
+                app->icon_preview =
+                    asset_packs_icon_load_file(furi_string_get_cstr(app->icon_file_path));
+                if(app->icon_preview) {
+                    scene_manager_next_scene(
+                        app->scene_manager, MomentumAppSceneInterfaceGraphicsIcon);
+                } else {
+                    DialogMessage* message = dialog_message_alloc();
+                    dialog_message_set_header(
+                        message, "Invalid Icon", 64, 3, AlignCenter, AlignTop);
+                    dialog_message_set_text(
+                        message,
+                        "Not a .bmx file\nor icon folder.",
+                        64,
+                        32,
+                        AlignCenter,
+                        AlignCenter);
+                    dialog_message_set_buttons(message, NULL, "OK", NULL);
+                    dialog_message_show(app->dialogs, message);
+                    dialog_message_free(message);
+                }
+            }
+            break;
+        }
         default:
             break;
         }

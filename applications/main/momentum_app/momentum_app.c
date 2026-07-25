@@ -424,6 +424,9 @@ MomentumApp* momentum_app_alloc() {
 
     strlcpy(app->device_name, furi_hal_version_get_name_ptr(), FURI_HAL_VERSION_ARRAY_NAME_LENGTH);
 
+    app->icon_file_path = furi_string_alloc_set(ASSET_PACKS_PATH);
+    app->icon_preview = NULL;
+
     DolphinStats stats = dolphin_stats(app->dolphin);
     app->dolphin_xp = stats.icounter;
     app->dolphin_angry = stats.butthurt;
@@ -503,6 +506,11 @@ void momentum_app_free(MomentumApp* app) {
     FrequencyList_clear(app->subghz_hopper_freqs);
 
     furi_string_free(app->version_tag);
+
+    // Defensive: the preview scene's on_exit is the normal release point.
+    asset_packs_icon_free(app->icon_preview);
+    app->icon_preview = NULL;
+    furi_string_free(app->icon_file_path);
 
     // Records
     furi_record_close(RECORD_NOTIFICATION);
