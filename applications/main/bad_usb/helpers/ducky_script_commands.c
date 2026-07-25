@@ -253,6 +253,27 @@ static int32_t ducky_fnc_mouse_move(BadUsbScript* bad_usb, const char* line, int
     return 0;
 }
 
+static int32_t ducky_fnc_msc_mount(BadUsbScript* bad_usb, const char* line, int32_t param) {
+    UNUSED(param);
+
+    line = &line[ducky_get_command_len(line) + 1];
+    if(line[0] == '\0') {
+        return ducky_error(bad_usb, "MASS_STORAGE_MOUNT needs a path");
+    }
+    if(bad_usb_msc_mount(bad_usb, line)) {
+        return 0;
+    }
+    return ducky_error(bad_usb, "Cannot mount %s", line);
+}
+
+static int32_t ducky_fnc_msc_umount(BadUsbScript* bad_usb, const char* line, int32_t param) {
+    UNUSED(param);
+    UNUSED(line);
+
+    bad_usb_msc_umount(bad_usb);
+    return 0;
+}
+
 static const DuckyCmd ducky_commands[] = {
     {"REM", NULL, -1},
     {"ID", NULL, -1},
@@ -281,6 +302,8 @@ static const DuckyCmd ducky_commands[] = {
     {"MOUSE_MOVE", ducky_fnc_mouse_move, -1},
     {"MOUSESCROLL", ducky_fnc_mouse_scroll, -1},
     {"MOUSE_SCROLL", ducky_fnc_mouse_scroll, -1},
+    {"MASS_STORAGE_MOUNT", ducky_fnc_msc_mount, -1},
+    {"MASS_STORAGE_UMOUNT", ducky_fnc_msc_umount, -1},
 };
 
 #define TAG "BadUsb"
