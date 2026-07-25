@@ -1,4 +1,5 @@
 #include <furi_hal_version.h>
+#include <furi_hal_version_i.h>
 #include <furi_hal_rtc.h>
 
 #include <furi.h>
@@ -90,6 +91,7 @@ typedef struct {
     char device_name[FURI_HAL_VERSION_DEVICE_NAME_LENGTH]; /** device name for special needs */
     uint8_t ble_mac[6];
     uint8_t custom_uid[8]; /** stable zero-padded UID derived from the name */
+    bool custom_uid_set; /** true when furi_hal_version_uid() should return custom_uid */
 } FuriHalVersion;
 
 static FuriHalVersion furi_hal_version = {0};
@@ -131,6 +133,10 @@ void furi_hal_version_set_name(const char* name) {
             name,
             MIN(strlen(name), sizeof(furi_hal_version.custom_uid)));
     }
+    // Preserve the exact pre-existing furi_hal_version_uid() gate: the name-derived
+    // UID is handed out only while a custom name is active. A later explicit
+    // furi_hal_version_set_custom_uid() (Serial spoof) overrides both fields.
+    furi_hal_version.custom_uid_set = (version_get_custom_name(NULL) != NULL);
 
     // BLE Mac address
     uint32_t platform_id = FURI_HAL_VERSION_PLATFORM_ID;
@@ -332,10 +338,21 @@ const uint8_t* furi_hal_version_uid_default(void) {
 }
 
 const uint8_t* furi_hal_version_uid(void) {
-    if(version_get_custom_name(NULL) != NULL) {
+    if(furi_hal_version.custom_uid_set) {
         // Return the stable zero-padded buffer, not a pointer into the name
         // string (which could be shorter than furi_hal_version_uid_size()).
+        // Set either from the custom name (in set_name) or explicitly by a
+        // Serial spoof via furi_hal_version_set_custom_uid().
         return furi_hal_version.custom_uid;
     }
     return furi_hal_version_uid_default();
+}
+
+void furi_hal_version_set_ble_mac(const uint8_t mac[6]) {
+    memcpy(furi_hal_version.ble_mac, mac, sizeof(furi_hal_version.ble_mac));
+}
+
+void furi_hal_version_set_custom_uid(const uint8_t uid[8]) {
+    memcpy(furi_hal_version.custom_uid, uid, sizeof(furi_hal_version.custom_uid));
+    furi_hal_version.custom_uid_set = true;
 }

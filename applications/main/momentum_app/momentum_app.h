@@ -82,6 +82,8 @@ typedef struct {
     RgbColor lcd_color;
     RgbColor vgm_color;
     char device_name[FURI_HAL_VERSION_ARRAY_NAME_LENGTH];
+    uint8_t spoof_mac[6]; // BLE MAC spoof; all-zero = real
+    uint8_t spoof_serial[8]; // serial/UID spoof; all-zero = real
     uint32_t dolphin_xp;
     uint32_t dolphin_angry;
     FuriString* version_tag;
@@ -118,6 +120,9 @@ typedef enum {
 } MomentumAppView;
 
 bool momentum_app_apply(MomentumApp* app);
+
+// True if any byte is non-zero (all-zero = the "real / not set" spoof sentinel).
+bool momentum_app_bytes_any_set(const uint8_t* data, size_t size);
 
 void momentum_app_push_mainmenu_app(MomentumApp* app, FuriString* exe);
 void momentum_app_load_mainmenu_apps(MomentumApp* app);
