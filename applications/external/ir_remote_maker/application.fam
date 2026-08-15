@@ -1,0 +1,17 @@
+App(
+    appid="ir_remote_maker",
+    name="IR Remote Maker",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="ir_maker_app",
+    stack_size=3 * 1024,
+    requires=[
+        "gui",
+        "dialogs",
+    ],
+    fap_libs=["infrared"],
+    fap_icon="ir_maker_10px.png",
+    fap_category="Infrared",
+    fap_author="@lewisQ17",
+    fap_version="1.0",
+    fap_description="Build an IR remote from scratch: set a protocol + address, add named buttons by typing a command or learning one, preview each, save as a .ir file.",
+)

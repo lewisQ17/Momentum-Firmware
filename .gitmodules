@@ -1,6 +1,3 @@
-[submodule "applications/external"]
-	path = applications/external
-	url = https://github.com/lewisQ17/Momentum-Apps.git
 [submodule "assets/protobuf"]
 	path = assets/protobuf
 	url = https://github.com/Next-Flip/flipperzero-protobuf.git

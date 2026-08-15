@@ -1,0 +1,15 @@
+App(
+    appid="badge_wallet",
+    name="Badge Wallet",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="badge_wallet_app",
+    stack_size=3 * 1024,
+    requires=[
+        "gui",
+    ],
+    fap_icon="badge_wallet_10px.png",
+    fap_category="NFC",
+    fap_author="@lewisQ17",
+    fap_version="1.0",
+    fap_description="Daily-carry wallet for saved NFC access badges. Lists your /ext/nfc cards, lets you favourite and label them, and emulates any one in a couple of taps. Metadata lives in a sidecar; the .nfc files are never modified.",
+)
