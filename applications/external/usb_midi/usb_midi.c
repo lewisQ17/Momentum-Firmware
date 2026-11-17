@@ -15,7 +15,7 @@ static void draw_callback(Canvas* canvas, void* ctx) {
     furi_assert(ctx);
     UsbMidiApp* app = (UsbMidiApp*)ctx;
 
-    char* note_line = malloc(32);
+    char note_line[32];
     if(app->current_note.note >= 0) {
         int note = app->current_note.note % 12;
         int octave = app->current_note.note / 12 + 1;
