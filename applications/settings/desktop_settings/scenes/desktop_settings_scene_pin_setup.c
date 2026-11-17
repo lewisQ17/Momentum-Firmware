@@ -86,6 +86,15 @@ bool desktop_settings_scene_pin_setup_on_event(void* context, SceneManagerEvent 
                     DesktopSettingsAppScenePinError,
                     SCENE_STATE_PIN_ERROR_DURESS_SAME);
                 scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinError);
+            } else if(
+                !app->pin_setup_duress && desktop_pin_code_is_duress(&app->pincode_buffer)) {
+                // An unlock PIN identical to the duress PIN would wipe the SD card on
+                // every real unlock — reject without saying why.
+                scene_manager_set_scene_state(
+                    app->scene_manager,
+                    DesktopSettingsAppScenePinError,
+                    SCENE_STATE_PIN_ERROR_UNLOCK_SAME);
+                scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinError);
             } else {
                 scene_manager_next_scene(
                     app->scene_manager, DesktopSettingsAppScenePinSetupHowto2);

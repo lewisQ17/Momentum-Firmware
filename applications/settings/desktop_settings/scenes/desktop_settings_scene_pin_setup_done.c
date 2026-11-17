@@ -23,7 +23,8 @@ void desktop_settings_scene_pin_setup_done_on_enter(void* context) {
 
     const bool duress = app->pin_setup_duress;
     if(duress) {
-        // setup.c already rejected a duress PIN equal to the unlock PIN.
+        // setup.c already rejected a duress PIN equal to the unlock PIN
+        // (and an unlock PIN equal to the duress PIN).
         desktop_pin_code_set_duress(&app->pincode_buffer);
     } else {
         desktop_pin_code_set(&app->pincode_buffer);

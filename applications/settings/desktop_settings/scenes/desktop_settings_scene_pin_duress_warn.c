@@ -14,7 +14,7 @@ void desktop_settings_scene_pin_duress_warn_on_enter(void* context) {
     dialog_ex_set_header(dialog_ex, "Duress PIN wipes data!", 64, 8, AlignCenter, AlignCenter);
     dialog_ex_set_text(
         dialog_ex,
-        "Entering it at the lock\nscreen erases the SD card\n& settings, then reboots.",
+        "Entering it at the lock\nscreen quick-formats the\nSD, wipes keys & reboots.",
         64,
         34,
         AlignCenter,
@@ -43,14 +43,17 @@ bool desktop_settings_scene_pin_duress_warn_on_event(void* context, SceneManager
             break;
         case DialogExResultLeft:
             app->pin_setup_duress = false;
-            consumed = scene_manager_previous_scene(app->scene_manager);
+            // PinAuth sits below us in the stack; skip it and go back to the menu.
+            consumed = scene_manager_search_and_switch_to_previous_scene(
+                app->scene_manager, DesktopSettingsAppScenePinMenu);
             break;
         default:
             break;
         }
     } else if(event.type == SceneManagerEventTypeBack) {
         app->pin_setup_duress = false;
-        consumed = scene_manager_previous_scene(app->scene_manager);
+        consumed = scene_manager_search_and_switch_to_previous_scene(
+            app->scene_manager, DesktopSettingsAppScenePinMenu);
     }
 
     return consumed;

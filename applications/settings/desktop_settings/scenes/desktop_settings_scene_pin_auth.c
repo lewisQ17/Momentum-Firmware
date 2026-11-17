@@ -65,7 +65,24 @@ bool desktop_settings_scene_pin_auth_on_event(void* context, SceneManagerEvent e
             if(state == SCENE_STATE_PIN_AUTH_CHANGE_PIN) {
                 scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinSetupHowto);
             } else if(state == SCENE_STATE_PIN_AUTH_DISABLE) {
+                scene_manager_set_scene_state(
+                    app->scene_manager,
+                    DesktopSettingsAppScenePinDisable,
+                    SCENE_STATE_PIN_DISABLE_ALL);
                 scene_manager_next_scene(app->scene_manager, DesktopSettingsAppScenePinDisable);
+            } else if(state == SCENE_STATE_PIN_AUTH_DURESS) {
+                if(desktop_duress_pin_is_set()) {
+                    scene_manager_set_scene_state(
+                        app->scene_manager,
+                        DesktopSettingsAppScenePinDisable,
+                        SCENE_STATE_PIN_DISABLE_DURESS);
+                    scene_manager_next_scene(
+                        app->scene_manager, DesktopSettingsAppScenePinDisable);
+                } else {
+                    app->pin_setup_duress = true;
+                    scene_manager_next_scene(
+                        app->scene_manager, DesktopSettingsAppScenePinDuressWarn);
+                }
             } else {
                 furi_crash();
             }

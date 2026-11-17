@@ -39,6 +39,8 @@ void desktop_settings_scene_pin_error_on_enter(void* context) {
         desktop_view_pin_input_set_label_primary(app->pin_input_view, 35, 8, "Wrong PIN!");
     } else if(state == SCENE_STATE_PIN_ERROR_DURESS_SAME) {
         desktop_view_pin_input_set_label_primary(app->pin_input_view, 8, 8, "Same as unlock PIN!");
+    } else if(state == SCENE_STATE_PIN_ERROR_UNLOCK_SAME) {
+        desktop_view_pin_input_set_label_primary(app->pin_input_view, 8, 8, "PIN already in use!");
     } else {
         furi_crash();
     }

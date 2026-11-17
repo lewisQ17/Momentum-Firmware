@@ -6,12 +6,16 @@
 #include <notification/notification.h>
 #include <notification/notification_messages.h>
 #include <momentum/momentum.h>
+#include <storage/storage.h>
+#include <bt/bt_service/bt_keys_filename.h>
 
 #include "../desktop.h"
 #include "../desktop_i.h"
 #include "../views/desktop_events.h"
 #include "../views/desktop_view_pin_input.h"
 #include "../helpers/pin_code.h"
+#include "../desktop_keybinds_filename.h"
+#include "../desktop_settings_filename.h"
 #include "desktop_scene.h"
 
 #define WRONG_PIN_HEADER_TIMEOUT 3000
@@ -45,6 +49,20 @@ static void desktop_scene_pin_input_set_timer(Desktop* desktop, bool enable, uin
     }
 }
 
+// Duress wipe: quick-format the SD card (retry once) and drop the secrets kept
+// on the internal flash (BT bonds, Momentum/desktop settings, keybinds).
+static void desktop_scene_pin_input_duress_wipe(void) {
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    if(storage_sd_format(storage) != FSE_OK) {
+        storage_sd_format(storage);
+    }
+    storage_common_remove(storage, BT_KEYS_STORAGE_PATH);
+    storage_common_remove(storage, MOMENTUM_SETTINGS_PATH);
+    storage_common_remove(storage, DESKTOP_SETTINGS_PATH);
+    storage_common_remove(storage, DESKTOP_KEYBINDS_PATH);
+    furi_record_close(RECORD_STORAGE);
+}
+
 static void desktop_scene_pin_input_back_callback(void* context) {
     Desktop* desktop = (Desktop*)context;
     view_dispatcher_send_custom_event(desktop->view_dispatcher, DesktopPinInputEventBack);
@@ -55,13 +73,11 @@ static void desktop_scene_pin_input_done_callback(const DesktopPinCode* pin_code
 
     // Duress PIN (opt-in): if the entered code matches the configured duress PIN,
     // wipe the SD card + RTC state and reboot instead of unlocking. Checked first
-    // so it takes precedence; setup guarantees it differs from the unlock PIN, so
-    // a legitimate unlock can never land here. To an onlooker this looks like an
+    // so it takes precedence; setup rejects a duress PIN equal to the unlock PIN (and vice
+    // versa), so a legitimate unlock can never land here. To an onlooker this looks like an
     // ordinary reboot.
     if(desktop_pin_code_is_duress(pin_code)) {
-        Storage* storage = furi_record_open(RECORD_STORAGE);
-        storage_sd_format(storage);
-        furi_record_close(RECORD_STORAGE);
+        desktop_scene_pin_input_duress_wipe();
         furi_hal_rtc_reset_registers();
         Power* power = furi_record_open(RECORD_POWER);
         power_reboot(power, PowerBootModeNormal);

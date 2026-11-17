@@ -6,6 +6,7 @@
 #include "../desktop_settings_custom_event.h"
 #include <desktop/desktop_settings.h>
 #include "desktop_settings_scene.h"
+#include "desktop_settings_scene_i.h"
 
 static void pin_disable_back_callback(void* context) {
     furi_assert(context);
@@ -17,7 +18,13 @@ void desktop_settings_scene_pin_disable_on_enter(void* context) {
     furi_assert(context);
     DesktopSettingsApp* app = context;
 
-    desktop_pin_code_reset();
+    uint32_t state =
+        scene_manager_get_scene_state(app->scene_manager, DesktopSettingsAppScenePinDisable);
+    if(state != SCENE_STATE_PIN_DISABLE_DURESS) {
+        desktop_pin_code_reset();
+    }
+    // A duress PIN without an unlock PIN is meaningless (and invisible in the menu).
+    desktop_pin_code_reset_duress();
 
     popup_set_context(app->popup, app);
     popup_set_callback(app->popup, pin_disable_back_callback);
