@@ -105,6 +105,7 @@ void lfrfid_reader_stop(LFRFIDReader* reader) {
     if(reader->thread) {
         furi_thread_flags_set(furi_thread_get_id(reader->thread), LFRFIDReaderEventStopThread);
         furi_thread_join(reader->thread);
+        furi_thread_free(reader->thread);
         reader->thread = NULL;
     }
 }
