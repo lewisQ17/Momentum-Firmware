@@ -135,6 +135,8 @@ NfcApp* nfc_app_alloc(void) {
     instance->iso14443_3a_edit_data = iso14443_3a_alloc();
     instance->file_path = furi_string_alloc_set(NFC_APP_FOLDER);
     instance->file_name = furi_string_alloc();
+    instance->uid_backup_device = NULL;
+    instance->uid_backup_name = furi_string_alloc();
 
     return instance;
 }
@@ -221,6 +223,8 @@ void nfc_app_free(NfcApp* instance) {
     iso14443_3a_free(instance->iso14443_3a_edit_data);
     furi_string_free(instance->file_path);
     furi_string_free(instance->file_name);
+    if(instance->uid_backup_device) nfc_device_free(instance->uid_backup_device);
+    furi_string_free(instance->uid_backup_name);
 
     free(instance);
 }
@@ -270,6 +274,9 @@ bool nfc_save_file(NfcApp* instance, FuriString* path) {
 
     if(!result) {
         dialog_message_show_storage_error(instance->dialogs, "Cannot save\nkey file");
+    } else if(instance->uid_backup_device) {
+        // Saved: a pending "Save as UID-only" is done, drop the backup of the full read.
+        nfc_device_clear(instance->uid_backup_device);
     }
 
     return result;

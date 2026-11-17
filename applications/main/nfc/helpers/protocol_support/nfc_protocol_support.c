@@ -383,6 +383,16 @@ static void nfc_protocol_support_save_as_uid(NfcApp* instance) {
     const uint8_t* uid = nfc_device_get_uid(instance->nfc_device, &uid_len);
     if(uid_len != 4 && uid_len != 7 && uid_len != 10) return;
 
+    // The device is overwritten below; keep the full read so it can be restored
+    // if the user backs out of the name screen (see ..._restore_uid_backup).
+    if(!instance->uid_backup_device) instance->uid_backup_device = nfc_device_alloc();
+    const NfcProtocol orig_protocol = nfc_device_get_protocol(instance->nfc_device);
+    nfc_device_set_data(
+        instance->uid_backup_device,
+        orig_protocol,
+        nfc_device_get_data(instance->nfc_device, orig_protocol));
+    furi_string_set(instance->uid_backup_name, instance->file_name);
+
     Iso14443_3aData* data = instance->iso14443_3a_edit_data;
     iso14443_3a_reset(data);
     iso14443_3a_set_uid(data, uid, uid_len);
@@ -399,7 +409,22 @@ static void nfc_protocol_support_save_as_uid(NfcApp* instance) {
     furi_string_reset(instance->file_name); // force a fresh auto-name in SaveName
 }
 
+// Undo nfc_protocol_support_save_as_uid() when the save was cancelled.
+static void nfc_protocol_support_restore_uid_backup(NfcApp* instance) {
+    if(!instance->uid_backup_device) return;
+    const NfcProtocol protocol = nfc_device_get_protocol(instance->uid_backup_device);
+    if(protocol != NfcProtocolInvalid) {
+        nfc_device_set_data(
+            instance->nfc_device,
+            protocol,
+            nfc_device_get_data(instance->uid_backup_device, protocol));
+        furi_string_set(instance->file_name, instance->uid_backup_name);
+        nfc_device_clear(instance->uid_backup_device);
+    }
+}
+
 static void nfc_protocol_support_scene_read_menu_on_enter(NfcApp* instance) {
+    nfc_protocol_support_restore_uid_backup(instance);
     const NfcProtocol protocol = nfc_device_get_protocol(instance->nfc_device);
 
     Submenu* submenu = instance->submenu;

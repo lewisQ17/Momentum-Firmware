@@ -189,6 +189,10 @@ struct NfcApp {
     Iso14443_3aData* iso14443_3a_edit_data;
     FuriString* file_path;
     FuriString* file_name;
+    // Original read data, kept while a "Save as UID-only" is pending (see
+    // nfc_protocol_support_save_as_uid); restored if the save is cancelled.
+    NfcDevice* uid_backup_device;
+    FuriString* uid_backup_name;
     FuriTimer* timer;
 
     bool fav_timeout;
