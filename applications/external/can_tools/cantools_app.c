@@ -168,6 +168,10 @@ typedef struct App {
     uint8_t dbc_file_count;
     int active_dbc_index;
     FuriString* dbc_header;
+    // Lines found after the first message, kept in original order
+    FuriString* dbc_footer;
+    // File holds content we cannot represent in memory, so rewriting it would lose data
+    bool dbc_lossy;
 } App;
 
 typedef enum {
@@ -844,6 +848,14 @@ cleanup:
     return found;
 }
 
+// Append a raw file line to dst, always newline terminated
+static void dbc_append_raw_line(FuriString* dst, const FuriString* line) {
+    furi_string_cat(dst, line);
+    if(furi_string_get_char(line, furi_string_size(line) - 1) != '\n') {
+        furi_string_push_back(dst, '\n');
+    }
+}
+
 static bool dbc_load_file(App* app, const char* path) {
     dbc_clear_signals(app);
     app->vehicle_info[0] = '\0';
@@ -851,6 +863,11 @@ static bool dbc_load_file(App* app, const char* path) {
         app->dbc_header = furi_string_alloc();
     }
     furi_string_reset(app->dbc_header);
+    if(!app->dbc_footer) {
+        app->dbc_footer = furi_string_alloc();
+    }
+    furi_string_reset(app->dbc_footer);
+    app->dbc_lossy = false;
 
     Storage* storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = buffered_file_stream_alloc(storage);
@@ -862,6 +879,10 @@ static bool dbc_load_file(App* app, const char* path) {
     }
 
     FuriString* line = furi_string_alloc();
+    // Raw BO_ line, only kept if no signal follows it (otherwise it is regenerated on write)
+    FuriString* pending_bo = furi_string_alloc();
+    bool pending_has_signal = false;
+    bool in_body = false;
     uint32_t current_can_id = 0;
     char current_msg[TEXT_INPUT_SIZE] = {0};
 
@@ -879,23 +900,41 @@ static bool dbc_load_file(App* app, const char* path) {
         }
 
         if(dbc_parse_bo_line(trimmed, &current_can_id, current_msg, sizeof(current_msg))) {
+            if(furi_string_size(pending_bo) > 0 && !pending_has_signal) {
+                dbc_append_raw_line(app->dbc_footer, pending_bo);
+            }
+            furi_string_set(pending_bo, line);
+            pending_has_signal = false;
+            in_body = true;
             continue;
         }
 
-        if(app->signal_count < MAX_SIGNALS) {
+        if(strncmp(trimmed, "SG_", 3) == 0) {
             DbcSignal sig;
-            if(dbc_parse_sg_line(trimmed, &sig, current_can_id, current_msg)) {
+            if(app->signal_count < MAX_SIGNALS &&
+               dbc_parse_sg_line(trimmed, &sig, current_can_id, current_msg)) {
                 app->signals[app->signal_count++] = sig;
+                pending_has_signal = true;
                 continue;
             }
-        } else {
-            FURI_LOG_W(TAG, "MAX_SIGNALS reached, ignoring extra signals");
+            // Cannot be held in memory; refuse to rewrite the file instead of dropping it
+            FURI_LOG_W(TAG, "Unusable SG_ line, DBC file is now read-only");
+            app->dbc_lossy = true;
+            continue;
         }
 
-        furi_string_cat_str(app->dbc_header, buf);
-        furi_string_cat_str(app->dbc_header, "\n");
+        // Unparsed line: keep it verbatim and in its original order
+        if(furi_string_size(pending_bo) > 0 && !pending_has_signal) {
+            dbc_append_raw_line(app->dbc_footer, pending_bo);
+        }
+        furi_string_reset(pending_bo);
+        dbc_append_raw_line(in_body ? app->dbc_footer : app->dbc_header, line);
     }
 
+    if(furi_string_size(pending_bo) > 0 && !pending_has_signal) {
+        dbc_append_raw_line(app->dbc_footer, pending_bo);
+    }
+    furi_string_free(pending_bo);
     furi_string_free(line);
     ok = true;
 
@@ -966,6 +1005,10 @@ static bool dbc_set_active_file(App* app, int index) {
 
 static bool dbc_write_file(App* app) {
     if(app->active_dbc_index < 0 || app->active_dbc_index >= app->dbc_file_count) return false;
+    if(app->dbc_lossy) {
+        FURI_LOG_E(TAG, "Refusing to rewrite DBC file with unrepresentable content");
+        return false;
+    }
 
     Storage* storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = buffered_file_stream_alloc(storage);
@@ -1013,6 +1056,10 @@ static bool dbc_write_file(App* app) {
         }
     }
     furi_string_free(line);
+
+    if(app->dbc_footer && furi_string_size(app->dbc_footer) > 0) {
+        stream_write_cstring(stream, furi_string_get_cstr(app->dbc_footer));
+    }
 
     ok = true;
 
@@ -2352,6 +2399,7 @@ static App* app_alloc() {
     app->active_dbc_index = -1;
     app->dbc_file_count = 0;
     app->dbc_header = furi_string_alloc();
+    app->dbc_footer = furi_string_alloc();
 
     return app;
 }
@@ -2370,6 +2418,9 @@ static void app_free(App* app) {
     byte_input_free(app->byte_input);
     if(app->dbc_header) {
         furi_string_free(app->dbc_header);
+    }
+    if(app->dbc_footer) {
+        furi_string_free(app->dbc_footer);
     }
     furi_record_close(RECORD_DIALOGS);
     free(app->buffer);
