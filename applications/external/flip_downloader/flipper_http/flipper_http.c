@@ -78,7 +78,7 @@ static int32_t flipper_http_worker(void *context)
                 if (fhttp->handle_rx_line_cb)
                 {
                     // Handle line buffering
-                    if (c == '\n' || rx_line_pos >= RX_LINE_BUFFER_SIZE - 1)
+                    if (c == '\n')
                     {
                         fhttp->rx_line_buffer[rx_line_pos] = '\0'; // Null-terminate the line
 
@@ -91,6 +91,17 @@ static int32_t flipper_http_worker(void *context)
                     else
                     {
                         fhttp->rx_line_buffer[rx_line_pos++] = c; // Add character to the line buffer
+                        // Line buffer full: flush it (the current char is already stored)
+                        if (rx_line_pos >= RX_LINE_BUFFER_SIZE - 1)
+                        {
+                            fhttp->rx_line_buffer[rx_line_pos] = '\0'; // Null-terminate the line
+
+                            // Invoke the callback with the complete line
+                            fhttp->handle_rx_line_cb(fhttp->rx_line_buffer, fhttp->callback_context);
+
+                            // Reset the line buffer position
+                            rx_line_pos = 0;
+                        }
                     }
                 }
             }
@@ -1018,7 +1029,10 @@ bool flipper_http_send_data(FlipperHTTP *fhttp, const char *data)
                                      (strstr(send_buffer, "[WIFI/CONNECT]") == NULL)))
     {
         FURI_LOG_E("FlipperHTTP", "Cannot send data while INACTIVE.");
-        fhttp->last_response = "Cannot send data while INACTIVE.";
+        if (fhttp->last_response)
+        {
+            snprintf(fhttp->last_response, RX_BUF_SIZE, "Cannot send data while INACTIVE.");
+        }
         return false;
     }
 
@@ -1174,7 +1188,8 @@ static void flipper_http_rx_callback(const char *line, void *context)
             strstr(trimmed_line, "[PUT/END]") == NULL &&
             strstr(trimmed_line, "[DELETE/END]") == NULL)
         {
-            strncpy(fhttp->last_response, trimmed_line, RX_BUF_SIZE);
+            strncpy(fhttp->last_response, trimmed_line, RX_BUF_SIZE - 1);
+            fhttp->last_response[RX_BUF_SIZE - 1] = '\0';
         }
     }
     free(trimmed_line); // Free the allocated memory for trimmed_line
