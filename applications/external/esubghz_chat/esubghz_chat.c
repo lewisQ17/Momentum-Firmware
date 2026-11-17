@@ -39,6 +39,15 @@ void append_msg(ESubGhzChatState* state, const char* msg) {
     /* append message to text box */
     furi_string_cat_printf(state->chat_box_store, "\n%s", msg);
 
+    /* cap the store: drop the oldest lines, so a flood of received packets cannot exhaust the heap */
+    size_t store_size = furi_string_size(state->chat_box_store);
+    if(store_size > CHAT_BOX_STORE_SIZE) {
+        size_t keep_from = store_size - CHAT_BOX_STORE_SIZE;
+        size_t line_start = furi_string_search_char(state->chat_box_store, '\n', keep_from);
+        furi_string_right(
+            state->chat_box_store, (line_start == FURI_STRING_FAILURE) ? keep_from : line_start);
+    }
+
     /* prepare message preview */
     strncpy(state->msg_preview, msg, MSG_PREVIEW_SIZE);
     state->msg_preview[MSG_PREVIEW_SIZE] = 0;
