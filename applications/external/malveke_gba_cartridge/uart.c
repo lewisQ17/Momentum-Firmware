@@ -94,6 +94,12 @@ static void uart_echo_push_to_list(void* context, uint8_t data) {
             json_buffer_index = 0;
         }
     } else {
+        // Line too long for the buffer (noise / wrong baud rate): drop it instead of overflowing
+        if(json_buffer_index >= sizeof(json_buffer) - 1) {
+            json_capture_active = false;
+            json_buffer_index = 0;
+            return;
+        }
         // Capturamos caracteres hasta encontrar '\n'
         json_buffer[json_buffer_index++] = data;
         if(data == '\n') {

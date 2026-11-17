@@ -80,6 +80,15 @@ void gb_cartridge_scene_3_set_callback(
     instance->callback = callback;
     instance->context = context;
 }
+// Map the event type from the device to a static string: no per-message heap allocation
+static char* event_type_intern(const char* type) {
+    static char* const known[] = {"progress", "success", "connected"};
+    for(size_t i = 0; i < COUNT_OF(known); i++) {
+        if(strcmp(type, known[i]) == 0) return known[i];
+    }
+    return "None";
+}
+
 void gameboy_ram_backup_handle_rx_data_cb(uint8_t* buf, size_t len, void* context) {
     furi_assert(context);
     UNUSED(len);
@@ -92,10 +101,11 @@ void gameboy_ram_backup_handle_rx_data_cb(uint8_t* buf, size_t len, void* contex
             UNUSED(model);
             cJSON* json = cJSON_Parse((char*)buf);
             if(json == NULL) {
+                if(model->event_type == NULL) model->event_type = "None";
             } else {
                 cJSON* type = cJSON_GetObjectItemCaseSensitive(json, "type");
                 if(cJSON_IsString(type) && (type->valuestring != NULL)) {
-                    model->event_type = strdup(type->valuestring);
+                    model->event_type = event_type_intern(type->valuestring);
                 } else {
                     model->event_type = "None";
                 }
@@ -121,6 +131,7 @@ void gameboy_ram_backup_handle_rx_data_cb(uint8_t* buf, size_t len, void* contex
                     model->ramBanks = 0;
                 }
             }
+            if(json) cJSON_Delete(json);
             if(strcmp(model->event_type, "success") == 0) {
                 model->progress = 100;
                 // if(instance->cart_ram && storage_file_is_open(instance->cart_ram)) {

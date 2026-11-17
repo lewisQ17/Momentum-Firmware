@@ -139,6 +139,7 @@ void gameboy_information_handle_rx_data_cb(uint8_t* buf, size_t len, void* conte
 
                 instance->rom_banks = model->romBanks;
                 instance->ram_banks = model->ramBanks;
+                cJSON_Delete(json);
             }
         },
         true);
