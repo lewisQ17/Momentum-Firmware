@@ -37,6 +37,7 @@ LightMeterApp* lightmeter_app_alloc(uint32_t first_scene) {
     app->config->measurement_resolution = HIGH_RES;
     app->config->device_addr = ADDR_LOW;
     app->config->lux_only = LUX_ONLY_OFF;
+    app->config->sensor_type = SENSOR_BH1750;
 
     // Records
     app->gui = furi_record_open(RECORD_GUI);
@@ -59,6 +60,18 @@ LightMeterApp* lightmeter_app_alloc(uint32_t first_scene) {
         flipper_format_read_int32(cfg_fmt, "sensor_type", &app->config->sensor_type, 1);
     }
     flipper_format_free(cfg_fmt);
+
+    // The values are used as array indices: fall back to defaults when out of range
+    if((uint32_t)app->config->iso >= ISO_NUM) app->config->iso = DEFAULT_ISO;
+    if((uint32_t)app->config->aperture >= AP_NUM) app->config->aperture = DEFAULT_APERTURE;
+    if((uint32_t)app->config->dome > WITH_DOME) app->config->dome = DEFAULT_DOME;
+    if((uint32_t)app->config->backlight > BACKLIGHT_ON) app->config->backlight = DEFAULT_BACKLIGHT;
+    if((uint32_t)app->config->measurement_resolution > HIGH_RES2)
+        app->config->measurement_resolution = HIGH_RES;
+    if((uint32_t)app->config->lux_only > LUX_ONLY_ON) app->config->lux_only = LUX_ONLY_OFF;
+    if((uint32_t)app->config->device_addr > ADDR_HIGH) app->config->device_addr = ADDR_LOW;
+    if((uint32_t)app->config->sensor_type > SENSOR_MAX44009)
+        app->config->sensor_type = SENSOR_BH1750;
 
     // Sensor
     lightmeter_app_i2c_init_sensor(app);
