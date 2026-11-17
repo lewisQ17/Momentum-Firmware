@@ -38,10 +38,13 @@ typedef struct {
     Storage* storage;
 
     FuriString* buffer;
+    FuriMutex* mutex;
 } HexEditor;
 
 static void draw_callback(Canvas* canvas, void* ctx) {
     HexEditor* hex_editor = ctx;
+
+    furi_mutex_acquire(hex_editor->mutex, FuriWaitForever);
 
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
@@ -86,6 +89,8 @@ static void draw_callback(Canvas* canvas, void* ctx) {
     }
 
     canvas_draw_glyph(canvas, 30, 45, hex_editor->model->editable_char);
+
+    furi_mutex_release(hex_editor->mutex);
 }
 
 static void input_callback(InputEvent* input_event, void* ctx) {
@@ -105,6 +110,8 @@ static HexEditor* hex_editor_alloc() {
     instance->model->editable_char = ' ';
 
     instance->input_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
+
+    instance->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
     instance->view_port = view_port_alloc();
     view_port_draw_callback_set(instance->view_port, draw_callback, instance);
@@ -135,6 +142,7 @@ static void hex_editor_free(HexEditor* instance) {
     }
 
     furi_string_free(instance->buffer);
+    furi_mutex_free(instance->mutex);
 
     free(instance->model);
     free(instance);
@@ -190,7 +198,10 @@ int32_t hex_editor_app(void* p) {
 
         if(!hex_editor_open_file(hex_editor, furi_string_get_cstr(file_path))) break;
 
-        if(!stream_read_line(hex_editor->model->stream, hex_editor->buffer)) {
+        furi_mutex_acquire(hex_editor->mutex, FuriWaitForever);
+        bool has_line = stream_read_line(hex_editor->model->stream, hex_editor->buffer);
+        furi_mutex_release(hex_editor->mutex);
+        if(!has_line) {
             FURI_LOG_T(TAG, "No keys left in dict");
             break;
         }
@@ -205,6 +216,7 @@ int32_t hex_editor_app(void* p) {
                 FuriStatusOk);
 
             // Если нажата кнопка "назад", то выходим из цикла, а следовательно и из приложения
+            furi_mutex_acquire(hex_editor->mutex, FuriWaitForever);
             if(event.type == InputTypeShort || event.type == InputTypeRepeat) {
                 if(!hex_editor->model->mode) {
                     offset_modifier = 1;
@@ -239,6 +251,7 @@ int32_t hex_editor_app(void* p) {
 
                         if(!stream_seek(hex_editor->model->stream, -1, StreamOffsetFromCurrent)) {
                             FURI_LOG_E(TAG, "Unable to seek stream");
+                            furi_mutex_release(hex_editor->mutex);
                             break;
                         }
                         // NOT work on first line
@@ -252,21 +265,28 @@ int32_t hex_editor_app(void* p) {
                             if(!stream_seek(
                                    hex_editor->model->stream, 1, StreamOffsetFromCurrent)) {
                                 FURI_LOG_E(TAG, "Unable to seek stream");
+                                furi_mutex_release(hex_editor->mutex);
                                 break;
                             }
                         }
 
                         if(!stream_read_line(hex_editor->model->stream, hex_editor->buffer)) {
                             FURI_LOG_T(TAG, "No keys left in dict");
+                            furi_mutex_release(hex_editor->mutex);
                             break;
                         }
                     }
 
                     if(event.key == InputKeyOk) {
-                        hex_editor->model->editable_char = furi_string_get_char(
+                        char current_char = furi_string_get_char(
                             hex_editor->buffer, hex_editor->model->string_offset);
 
-                        hex_editor->model->mode = 1;
+                        // Never edit the line terminator, it would merge lines
+                        if(current_char != '\n') {
+                            hex_editor->model->editable_char = current_char;
+
+                            hex_editor->model->mode = 1;
+                        }
                     }
                 } else {
                     offset_modifier = 1;
@@ -283,6 +303,7 @@ int32_t hex_editor_app(void* p) {
                     if(event.key == InputKeyOk) {
                         if(!stream_seek(hex_editor->model->stream, -1, StreamOffsetFromCurrent)) {
                             FURI_LOG_E(TAG, "Unable to seek stream");
+                            furi_mutex_release(hex_editor->mutex);
                             break;
                         }
                         if(!stream_seek_to_char(
@@ -308,6 +329,7 @@ int32_t hex_editor_app(void* p) {
                         if(!stream_write_char(
                                hex_editor->model->stream, hex_editor->model->editable_char)) {
                             FURI_LOG_E(TAG, "Unable to stream_write_char");
+                            furi_mutex_release(hex_editor->mutex);
                             break;
                         }
 
@@ -324,17 +346,20 @@ int32_t hex_editor_app(void* p) {
                             if(!stream_seek(
                                    hex_editor->model->stream, 1, StreamOffsetFromCurrent)) {
                                 FURI_LOG_E(TAG, "Unable to seek stream");
+                                furi_mutex_release(hex_editor->mutex);
                                 break;
                             }
                         }
 
                         if(!stream_read_line(hex_editor->model->stream, hex_editor->buffer)) {
                             FURI_LOG_T(TAG, "No keys left in dict");
+                            furi_mutex_release(hex_editor->mutex);
                             break;
                         }
                     }
                 }
             }
+            furi_mutex_release(hex_editor->mutex);
             if(event.key == InputKeyBack) {
                 break;
             }
