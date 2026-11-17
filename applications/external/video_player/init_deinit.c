@@ -65,12 +65,15 @@ void deinit_player(VideoPlayerApp* player) {
         free(player->fake_audio_buffer);
     }
 
-    furi_pubsub_unsubscribe(player->input, player->input_subscription);
+    // only set up when the speaker was acquired and direct draw taken
+    if(player->input_subscription != NULL) {
+        furi_pubsub_unsubscribe(player->input, player->input_subscription);
 
-    player->canvas = NULL;
-    gui_direct_draw_release(player->gui);
-    furi_record_close(RECORD_GUI);
-    furi_record_close(RECORD_INPUT_EVENTS);
+        player->canvas = NULL;
+        gui_direct_draw_release(player->gui);
+        furi_record_close(RECORD_GUI);
+        furi_record_close(RECORD_INPUT_EVENTS);
+    }
 
     free(player);
 }

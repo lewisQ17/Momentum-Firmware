@@ -142,39 +142,50 @@ int32_t video_player_app(void* p) {
                 player->quit = true;
             }
 
-            stream_read(player->stream, (uint8_t*)&player->version, sizeof(player->version));
-            stream_read(player->stream, (uint8_t*)&player->num_frames, sizeof(player->num_frames));
-            stream_read(
-                player->stream,
-                (uint8_t*)&player->audio_chunk_size,
-                sizeof(player->audio_chunk_size));
-            stream_read(
-                player->stream, (uint8_t*)&player->sample_rate, sizeof(player->sample_rate));
-            stream_read(player->stream, &player->height, sizeof(player->height));
-            stream_read(player->stream, &player->width, sizeof(player->width));
+            // a bad header must not reach the allocations below (audio_chunk_size sizes them)
+            if(!(player->quit)) {
+                stream_read(player->stream, (uint8_t*)&player->version, sizeof(player->version));
+                stream_read(player->stream, (uint8_t*)&player->num_frames, sizeof(player->num_frames));
+                stream_read(
+                    player->stream,
+                    (uint8_t*)&player->audio_chunk_size,
+                    sizeof(player->audio_chunk_size));
+                stream_read(
+                    player->stream, (uint8_t*)&player->sample_rate, sizeof(player->sample_rate));
+                stream_read(player->stream, &player->height, sizeof(player->height));
+                stream_read(player->stream, &player->width, sizeof(player->width));
 
-            player->header_size = stream_tell(player->stream);
+                player->header_size = stream_tell(player->stream);
 
-            player->buffer = (uint8_t*)malloc(
-                player->audio_chunk_size * 2 +
-                (uint32_t)player->height * (uint32_t)player->width / 8);
-            memset(
-                player->buffer,
-                0,
-                player->audio_chunk_size * 2 +
+                if(player->audio_chunk_size == 0 || player->audio_chunk_size > 32768 ||
+                   player->sample_rate == 0 || player->width == 0 || player->height == 0) {
+                    FURI_LOG_E("VideoPlayer", "Invalid .bnd header");
+                    player->quit = true;
+                }
+            }
+
+            if(!(player->quit)) {
+                player->buffer = (uint8_t*)malloc(
+                    player->audio_chunk_size * 2 +
                     (uint32_t)player->height * (uint32_t)player->width / 8);
+                memset(
+                    player->buffer,
+                    0,
+                    player->audio_chunk_size * 2 +
+                        (uint32_t)player->height * (uint32_t)player->width / 8);
 
-            player->image_buffer_length = (uint32_t)player->height * (uint32_t)player->width / 8;
-            player->audio_buffer = (uint8_t*)&player->buffer[player->image_buffer_length];
-            player->image_buffer = player->buffer;
+                player->image_buffer_length = (uint32_t)player->height * (uint32_t)player->width / 8;
+                player->audio_buffer = (uint8_t*)&player->buffer[player->image_buffer_length];
+                player->image_buffer = player->buffer;
 
-            player->fake_audio_buffer = (uint8_t*)malloc(player->audio_chunk_size * 2);
+                player->fake_audio_buffer = (uint8_t*)malloc(player->audio_chunk_size * 2);
 
-            player->frame_size =
-                player->audio_chunk_size + player->image_buffer_length; //for seeking
-            player->frames_per_turn = player->num_frames / 126;
+                player->frame_size =
+                    player->audio_chunk_size + player->image_buffer_length; //for seeking
+                player->frames_per_turn = player->num_frames / 126;
 
-            player->silent = furi_hal_rtc_is_flag_set(FuriHalRtcFlagStealthMode);
+                player->silent = furi_hal_rtc_is_flag_set(FuriHalRtcFlagStealthMode);
+            }
         }
 
         if(furi_hal_speaker_acquire(1000)) {
@@ -363,6 +374,15 @@ int32_t video_player_app(void* p) {
 
                 furi_thread_yield();
             }
+        } else {
+            // speaker is busy: tear down what init_player() set up and leave. deinit_player()
+            // must not touch direct draw / input records that were never acquired.
+            FURI_LOG_E("VideoPlayer", "Cannot acquire the speaker");
+            view_dispatcher_remove_view(player->view_dispatcher, VIEW_PLAYER);
+            view_dispatcher_free(player->view_dispatcher);
+            player_view_free(player->player_view);
+            furi_record_close(RECORD_GUI);
+            exit = true;
         }
         deinit_player(player);
         player_deinit_hardware();
