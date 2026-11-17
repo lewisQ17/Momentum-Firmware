@@ -3,6 +3,8 @@
 #include "u2f.h"
 
 #include <furi_hal_random.h>
+#include <storage/storage.h>
+#include "u2f_data.h"
 #include <toolbox/bit_buffer.h>
 
 #include <nfc/nfc.h>
@@ -32,8 +34,14 @@ static const uint8_t u2f_nfc_version[] = {'U', '2', 'F', '_', 'V', '2'};
 
 // Heap buffer holding the normalized request and, in-place, the U2F response
 // (body + SW). Realistic Register responses (~570 B with the 365 B stock cert)
-// fit comfortably; sized generously for user certificates too.
+// fit comfortably in the minimum size; larger user certificates grow the buffer
+// (see u2f_nfc_start) up to U2F_NFC_MAX_CERT_SIZE.
 #define U2F_NFC_BUF_SIZE 2048U
+
+// Register response = 67 B header + 65 B key handle + cert + <=72 B signature + 2 B SW.
+// Margin included.
+#define U2F_NFC_REGISTER_OVERHEAD 256U
+#define U2F_NFC_MAX_CERT_SIZE     16384U
 
 struct U2fNfc {
     Nfc* nfc;
@@ -42,10 +50,25 @@ struct U2fNfc {
     U2fData* u2f;
     BitBuffer* tx;
     uint8_t* buf;
+    size_t buf_size;
     uint16_t resp_len; // total cached response length (body + SW), 0 = none pending
     uint16_t resp_sent; // body bytes already transmitted (excludes final SW)
     bool selected;
 };
+
+// Size of the user attestation certificate on the SD card (0 if absent).
+static size_t u2f_nfc_cert_size(void) {
+    size_t size = 0;
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    File* file = storage_file_alloc(storage);
+    if(storage_file_open(file, U2F_CERT_FILE, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        size = storage_file_size(file);
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
+    return size;
+}
 
 // Parse an ISO7816 APDU (short or extended) starting at CLA. Fills lc/data/le.
 // Returns false on a malformed/truncated frame.
@@ -164,8 +187,16 @@ static void u2f_nfc_handle_msg(
     const uint8_t* data,
     size_t le) {
     // Guard against oversized requests overflowing the working buffer.
-    if(lc + 7 > U2F_NFC_BUF_SIZE) {
+    if(lc + 7 > u2f_nfc->buf_size) {
         u2f_nfc_send_sw(u2f_nfc, listener, 0x67, 0x00); // Wrong length
+        return;
+    }
+
+    // The Register response is built in place and grows with the certificate size:
+    // refuse it if it could not fit (certificate swapped/oversized).
+    if(ins == U2F_INS_REGISTER &&
+       u2f_nfc_cert_size() + U2F_NFC_REGISTER_OVERHEAD > u2f_nfc->buf_size) {
+        u2f_nfc_send_sw(u2f_nfc, listener, 0x6A, 0x84); // Not enough memory space
         return;
     }
 
@@ -285,7 +316,11 @@ static NfcCommand u2f_nfc_listener_callback(NfcGenericEvent event, void* context
 U2fNfc* u2f_nfc_start(U2fData* u2f_inst) {
     U2fNfc* u2f_nfc = malloc(sizeof(U2fNfc));
     u2f_nfc->u2f = u2f_inst;
-    u2f_nfc->buf = malloc(U2F_NFC_BUF_SIZE);
+    // Grow the working buffer for large (but sane) user certificates.
+    size_t cert_size = u2f_nfc_cert_size();
+    if(cert_size > U2F_NFC_MAX_CERT_SIZE) cert_size = 0; // Register will be refused
+    u2f_nfc->buf_size = MAX(U2F_NFC_BUF_SIZE, cert_size + U2F_NFC_REGISTER_OVERHEAD);
+    u2f_nfc->buf = malloc(u2f_nfc->buf_size);
     u2f_nfc->tx = bit_buffer_alloc(U2F_NFC_BUF_SIZE);
     u2f_nfc->resp_len = 0;
     u2f_nfc->resp_sent = 0;
