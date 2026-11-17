@@ -367,6 +367,13 @@ static void app_run(WavPlayerApp* app) {
 
     if(!wav_parser_parse(app->parser, app->stream, app)) return;
 
+    // sample rate is used as a divisor for the timer, the formats are the ones fill_data() handles
+    if(app->sample_rate == 0 || (app->num_channels != 1 && app->num_channels != 2) ||
+       (app->bits_per_sample != 8 && app->bits_per_sample != 16)) {
+        FURI_LOG_E(TAG, "Unsupported WAV format");
+        return;
+    }
+
     wav_player_view_set_volume(app->view, app->volume);
     wav_player_view_set_start(app->view, wav_parser_get_data_start(app->parser));
     wav_player_view_set_current(app->view, stream_tell(app->stream));
@@ -460,12 +467,13 @@ static void app_run(WavPlayerApp* app) {
         wav_player_speaker_stop();
         wav_player_dma_stop();
         furi_hal_speaker_release();
+
+        // Reset GPIO pin and bus states (only if wav_player_speaker_init() enabled them,
+        // disabling a bus that was never enabled is a furi_check crash)
+        wav_player_hal_deinit();
+
+        furi_hal_interrupt_set_isr(FuriHalInterruptIdDma1Ch1, NULL, NULL);
     }
-
-    // Reset GPIO pin and bus states
-    wav_player_hal_deinit();
-
-    furi_hal_interrupt_set_isr(FuriHalInterruptIdDma1Ch1, NULL, NULL);
 }
 
 int32_t wav_player_app(void* p) {
