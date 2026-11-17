@@ -147,7 +147,7 @@ static void init_gpio() {
                     gpio_pin_config[count].user.gp_idx_input = -1;
                     gpio_pin_config[count].user.changed = false;
 
-                    elements[j].gp_idx = i;
+                    elements[j].gp_idx = count; // index into gpio_pin_config, which skips the debug pins
                     elements[j].editable = true;
 
                     count++;
