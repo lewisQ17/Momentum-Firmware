@@ -519,7 +519,7 @@ uint8_t fs_file_create_truncate(uint32_t file_size) {
     return 0;
 }
 
-void my_write_block(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len) {
+bool my_write_block(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len) {
     uint32_t offset = block_number * FS_DATA_LENGTH;
     // FURI_LOG_I(TAG, "my_write_block: block %lu, valid_len %lu", block_number, valid_len);
     
@@ -530,14 +530,14 @@ void my_write_block(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], u
         storage_file_close(g.file);
         storage_file_free(g.file);
         furi_record_close(RECORD_STORAGE);
-        return;
+        return false;
     }
     if(!storage_file_open(g.file, g.r_file_path, FSAM_WRITE, FSOM_OPEN_EXISTING)) {
         FURI_LOG_E(TAG, "my_write_block: Failed to open file '%s'", g.r_file_path);
         storage_file_close(g.file);
         storage_file_free(g.file);
         furi_record_close(RECORD_STORAGE);
-        return;
+        return false;
     }
 
     if(!storage_file_seek(g.file, offset, true)) {
@@ -545,18 +545,20 @@ void my_write_block(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], u
         storage_file_close(g.file);
         storage_file_free(g.file);
         furi_record_close(RECORD_STORAGE);
-        return;
+        return false;
     }
 
     uint32_t bytes_written = storage_file_write(g.file, in52, valid_len);
+    bool ok = true;
     if (bytes_written < valid_len) {
         FURI_LOG_W(TAG, "my_write_block: Write error, only %lu bytes written", bytes_written);
+        ok = false;
     }
 
     storage_file_close(g.file);
     storage_file_free(g.file);
     furi_record_close(RECORD_STORAGE);
-    return;
+    return ok;
 }
 
 uint32_t my_read_block(uint32_t block_number, uint8_t out52[FS_DATA_LENGTH]) {
@@ -968,7 +970,15 @@ static void fs_handle_announce(uint8_t tx_id, const FS_pl_announce_t* ann) {
         g.r_locked_tx_id = tx_id;
         g.tx_id = tx_id; // respond on the same tx_id
         memcpy(g.r_file_name, ann->file_name, FS_FILENAME_LENGTH);
+        g.r_file_name[FS_FILENAME_LENGTH - 1] = 0;
         g.r_file_size = ann->file_size;
+        bool name_ok = g.r_file_name[0] != 0 && !strchr(g.r_file_name, '/') && !strchr(g.r_file_name, '\\');
+        if (!name_ok || g.r_file_size > FS_MAX_FILE_SIZE) {
+            FURI_LOG_E(TAG, "fs_handle_announce: Rejected invalid file name or size");
+            g.r_locked = false;
+            g.r_locked_tx_id = 0;
+            return;
+        }
         memcpy(g.r_md5, ann->hash_md5, sizeof(g.r_md5));
         g.r_blocks_needed = (g.r_file_size + FS_DATA_LENGTH - 1) / FS_DATA_LENGTH; // round up
 
@@ -1060,6 +1070,8 @@ static void fs_handle_data(uint8_t tx_id, const FS_pl_data_t* d) {
     if (g.mode != FS_MODE_RECEIVER) return;
     if (!g.r_locked || tx_id != g.r_locked_tx_id) return;
 
+    if (d->block_number >= g.r_blocks_needed) return; // out of range (also avoids uint32 wrap below)
+
     if (fs_map_get(d->block_number) == 1) { // already received
         FURI_LOG_W(TAG, "fs_handle_data: block %lu already received", d->block_number);
         return;
@@ -1074,9 +1086,9 @@ static void fs_handle_data(uint8_t tx_id, const FS_pl_data_t* d) {
     uint32_t remaining = g.r_file_size - block_start;
     uint32_t valid_len = (remaining >= FS_DATA_LENGTH) ? FS_DATA_LENGTH : remaining;
 
-    g.cb_write_block(d->block_number, d->data, valid_len);
+    if (!g.cb_write_block(d->block_number, d->data, valid_len)) return; // write failed, block stays missing
 
-    fs_map_set(d->block_number, 1); // mark block as received
+    if (!fs_map_set(d->block_number, 1)) return; // mark block as received
     fs_parts_on_block_set(d->block_number); // handle parts
     g.r_blocks_received++;
 

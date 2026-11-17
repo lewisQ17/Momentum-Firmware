@@ -8,6 +8,7 @@
 #define FS_PAYLOAD_LENGTH (FS_PACKET_LENGTH - 4)            // 4 for version, tx_id, packet_type, crc
 #define FS_FILENAME_LENGTH (FS_PAYLOAD_LENGTH - 4 - 16)     // 4 for file size, 16 for MD5 hash
 #define FS_DATA_LENGTH (FS_PAYLOAD_LENGTH - 4)              // 4 for block number
+#define FS_MAX_FILE_SIZE (16UL * 1024UL * 1024UL)           // sanity cap for announced file size
 
 #define FS_TIMEOUT_IDLE 1000                                // ms
 #define FS_TIMEOUT_BETWEEN_PACKETS 120                      // 70 ms        // TODO: optimize?
@@ -109,7 +110,7 @@ typedef struct {
 
     // Callback for writing a received block data by number to real storage.
     // in52 is always 52 bytes, but must write min(52, remainder).
-    void (*cb_write_block)(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len);
+    bool (*cb_write_block)(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len);
 } fs_ctx_t;
 
 extern fs_ctx_t g;      // extern to be available in GUI
@@ -129,7 +130,7 @@ typedef struct {
     uint32_t     (*s_read_block)(uint32_t block_number, uint8_t out52[FS_DATA_LENGTH]);
 
     // receiver-specific (required if mode == RECEIVER)
-    void (*r_write_block)(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len);
+    bool (*r_write_block)(uint32_t block_number, const uint8_t in52[FS_DATA_LENGTH], uint32_t valid_len);
 } fs_init_params_t;
 
 // API functions:
