@@ -294,6 +294,21 @@ void free_Log() {
     }
 }
 
+// Append one entry to Log (grows the pointer array). Takes ownership of fs, also on failure.
+static bool log_push(FuriString* fs) {
+    FuriString** tmp = realloc(Log, sizeof(*Log) * (Log_Total + 1));
+    if(tmp == NULL) {
+        furi_string_free(fs);
+        ERR = 3;
+        strcpy(ERR_STR, "Memory low");
+        FURI_LOG_D(TAG, ERR_STR);
+        return false;
+    }
+    Log = tmp;
+    Log[Log_Total++] = fs;
+    return true;
+}
+
 void free_store(void) {
     if(Constants) {
         furi_string_free(Constants);
@@ -642,6 +657,12 @@ bool fill_payload(char* p, uint8_t* idx_i, int32_t var_n) {
             return false;
         }
         if(end != p) {
+            if(fld >= sizeof(payload_struct) || idx + payload_struct[fld] > sizeof(payload)) {
+                ERR = 2;
+                strcpy(ERR_STR, "Payload too long");
+                FURI_LOG_D(TAG, "Payload overflow");
+                return false;
+            }
             payload[idx++] = b;
             if(payload_struct[fld] > 1) payload[idx++] = b >> 8;
             if(payload_struct[fld] > 2) payload[idx++] = b >> 16;
@@ -658,16 +679,6 @@ bool Run_Read_cmd(FuriString* cmd) {
     char* p = (char*)furi_string_get_cstr(cmd);
     p = strchr(p, '=');
     if(p == NULL) return false;
-    if(Log == NULL)
-        Log = malloc(sizeof(Log));
-    else
-        Log = realloc(Log, sizeof(Log) * (Log_Total + 1));
-    if(Log == NULL) {
-        ERR = 3;
-        strcpy(ERR_STR, "Memory low");
-        FURI_LOG_D(TAG, ERR_STR);
-        return false;
-    }
     FuriString* fs = furi_string_alloc();
     furi_string_set_strn(
         fs, (char*)furi_string_get_cstr(cmd), p - (char*)furi_string_get_cstr(cmd));
@@ -675,7 +686,7 @@ bool Run_Read_cmd(FuriString* cmd) {
     bool hexval;
     if((hexval = *(p + strlen(p) - 1) == '#'))
         furi_string_cat_str(fs, "0x"); // value in Hex format
-    Log[Log_Total++] = fs;
+    if(!log_push(fs)) return false;
     p++;
     memset(payload, 0, sizeof(payload));
     if(ReadDefault && !fill_payload((char*)furi_string_get_cstr(ReadDefault), NULL, VAR_EMPTY))
@@ -748,7 +759,7 @@ bool Run_ReadBatch_cmd(FuriString* cmd) {
         strcpy(ERR_STR, "NOT FOUND");
         FuriString* fs = furi_string_alloc();
         furi_string_set_strn(fs, p, len);
-        Log[Log_Total++] = fs;
+        log_push(fs);
         FURI_LOG_D(TAG, "CMD %s: %s", ERR_STR, p);
     }
     view_Batch = Log_Total ? Log_Total - 1 : 0;
@@ -766,7 +777,6 @@ void Prepare_Write_cmd(FuriString* cmd) {
         return;
     }
     p += 2;
-    Log = malloc(sizeof(Log));
     do {
         end = strchr(p, ';');
         uint8_t len;
@@ -778,15 +788,8 @@ void Prepare_Write_cmd(FuriString* cmd) {
             len = strlen(p);
         }
         FuriString* fs = furi_string_alloc();
-        if(Log_Total) Log = realloc(Log, sizeof(Log) * (Log_Total + 1));
-        if(Log == NULL) {
-            ERR = 3;
-            strcpy(ERR_STR, "Memory low");
-            FURI_LOG_D(TAG, ERR_STR);
-            return;
-        }
         furi_string_set_strn(fs, p, len);
-        Log[Log_Total++] = fs;
+        if(!log_push(fs)) return;
     } while((p = end));
 }
 
@@ -968,6 +971,12 @@ static uint8_t load_settings_file() {
                     if((p = strchr(p, ',')) == NULL) break;
                     p++;
                 } while(1);
+                if(payload_size > sizeof(payload)) {
+                    FURI_LOG_D(TAG, "Payload struct too big (%d)", payload_size);
+                    err = 3;
+                    payload_size = 0;
+                    payload_fields = 0;
+                }
                 FURI_LOG_D(
                     TAG,
                     "Payload fields %d: %d,%d,%d",
@@ -1040,11 +1049,17 @@ static uint8_t load_settings_file() {
                 p += sizeof(SettingsFld_Listen);
                 char* p2 = strchr(p, '=');
                 if(p2) {
-                    listen_addr_len = ConvertHexToArray(p, listen_addr, (p2 - p) / 2);
+                    size_t addr_chars = (p2 - p) / 2;
+                    listen_addr_len = ConvertHexToArray(
+                        p, listen_addr, addr_chars > sizeof(listen_addr) ? sizeof(listen_addr) : addr_chars);
                     p2++;
-                    uint8_t len = strlen(p2);
+                    size_t len = strlen(p2);
+                    if(ListenFields) free(ListenFields);
                     ListenFields = malloc(len + 1);
-                    if(ListenFields) memcpy(ListenFields, p2, len);
+                    if(ListenFields) {
+                        memcpy(ListenFields, p2, len);
+                        ListenFields[len] = 0;
+                    }
                 }
             }
         }
@@ -1317,7 +1332,9 @@ static void render_callback(Canvas* const canvas, void* ctx) {
                     p2 = strchr(p, ',');
                     if(p2 == NULL) p2 = p + strlen(p);
                     if(*(p2 - 1) == '#') hex = true;
-                    memcpy(screen_buf, p, len = p2 - p);
+                    len = p2 - p;
+                    if(len > 32) len = 32; // screen_buf is 64 bytes
+                    memcpy(screen_buf, p, len);
                     strcpy(screen_buf + len, ": ");
                     if(ListenNew) {
                         len = payload_struct[i];
