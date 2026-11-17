@@ -133,7 +133,8 @@ bool saflip_load_file(SaflipApp* app, const char* path) {
 
         // ---
 
-        if(flipper_format_read_uint32(file, "Variable Keys", &temp_uint32, 1)) {
+        if(flipper_format_read_uint32(file, "Variable Keys", &temp_uint32, 1) &&
+           temp_uint32 <= COUNT_OF(app->keys)) {
             app->variable_keys = temp_uint32;
         } else
             break;
@@ -164,7 +165,8 @@ bool saflip_load_file(SaflipApp* app, const char* path) {
 
         // ---
 
-        if(flipper_format_read_uint32(file, "Log Entries", &temp_uint32, 1)) {
+        if(flipper_format_read_uint32(file, "Log Entries", &temp_uint32, 1) &&
+           temp_uint32 <= COUNT_OF(app->log)) {
             app->log_entries = temp_uint32;
         } else
             break;
