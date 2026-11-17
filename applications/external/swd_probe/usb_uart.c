@@ -125,6 +125,10 @@ static int32_t usb_uart_worker(void* context) {
 
         if(events & WorkerEvtCdcRx) {
             size_t len = 0;
+            if(remain + USB_CDC_PKT_LEN > sizeof(data)) {
+                /* no complete line in a full buffer: drop it, else the next packet overflows it */
+                remain = 0;
+            }
             if(furi_mutex_acquire(usb_uart->usb_mutex, 100) == FuriStatusOk) {
                 len = furi_hal_cdc_receive(usb_uart->cfg.vcp_ch, &data[remain], USB_CDC_PKT_LEN);
                 furi_mutex_release(usb_uart->usb_mutex);
@@ -136,7 +140,7 @@ static int32_t usb_uart_worker(void* context) {
 
                 size_t handled = usb_uart->cfg.rx_data(usb_uart->cfg.rx_data_ctx, data, remain);
 
-                memcpy(data, &data[handled], remain - handled);
+                memmove(data, &data[handled], remain - handled);
                 remain -= handled;
             }
         }

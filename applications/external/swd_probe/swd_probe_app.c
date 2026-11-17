@@ -2114,7 +2114,7 @@ static bool swd_execute_script(AppFSM* const ctx, const char* filename) {
     ctx->script->app = ctx;
     ctx->script->max_tries = 1;
     ctx->script->parent = parent;
-    strcpy(ctx->script->filename, filename);
+    strlcpy(ctx->script->filename, filename, sizeof(ctx->script->filename));
 
     if(!storage_file_exists(ctx->storage, filename)) {
         DBG("Does not exist '%s'", filename);
@@ -2937,7 +2937,7 @@ static bool swd_message_process(AppFSM* ctx) {
 
                 case ModePageScan: {
                     FuriString* result_path = furi_string_alloc_printf(SWD_PATH);
-                    FuriString* preselected = furi_string_alloc_printf(
+                    FuriString* preselected = furi_string_alloc_set_str(
                         (strlen(ctx->script_detected) > 0) ? ctx->script_detected : SWD_PATH);
                     DialogsFileBrowserOptions options;
 
@@ -2945,7 +2945,7 @@ static bool swd_message_process(AppFSM* ctx) {
 
                     if(dialog_file_browser_show(ctx->dialogs, result_path, preselected, &options)) {
                         const char* path = furi_string_get_cstr(result_path);
-                        strcpy(ctx->script_detected, path);
+                        strlcpy(ctx->script_detected, path, sizeof(ctx->script_detected));
                     }
 
                     furi_string_free(result_path);
@@ -3009,7 +3009,7 @@ static bool swd_message_process(AppFSM* ctx) {
                 } else if((ctx->mode_page == ModePageScan) || (ctx->mode_page == ModePageFound)) {
                     uint32_t mode_page = ctx->mode_page;
                     FuriString* result_path = furi_string_alloc_printf(SWD_PATH);
-                    FuriString* preselected = furi_string_alloc_printf(
+                    FuriString* preselected = furi_string_alloc_set_str(
                         (strlen(ctx->script_detected) > 0) ? ctx->script_detected : SWD_PATH);
                     DialogsFileBrowserOptions options;
 
@@ -3078,7 +3078,12 @@ static bool swd_message_process(AppFSM* ctx) {
 size_t data_received(void* ctx, uint8_t* data, size_t length) {
     AppFSM* app = (AppFSM*)ctx;
 
+    /* line_data must keep room for the terminator */
+    if(length > sizeof(app->commandline->line_data) - 1) {
+        length = sizeof(app->commandline->line_data) - 1;
+    }
     strncpy(app->commandline->line_data, (const char*)data, length);
+    app->commandline->line_data[length] = 0;
     app->commandline->line_pos = 0;
 
     for(size_t pos = 0; pos < length; pos++) {
