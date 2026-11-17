@@ -32,17 +32,42 @@ static void archive_extract_dest_from_path(const char* archive_path, FuriString*
 // Skip entries with a ".." path component (zip-slip): tar_archive joins entry
 // names onto the destination without normalising them, so they could write
 // outside it.
+//
+// The check runs on the exact string path_append() will use (whitespace trimmed,
+// then '/'), so a name like " ../x" cannot pass here and turn into "../x" there.
+// A component made only of dots and blanks with two or more dots (".." but also
+// " .. ", "...") is rejected, as are control characters.
 static bool archive_extract_entry_filter(const char* name, bool is_directory, void* context) {
     UNUSED(is_directory);
     UNUSED(context);
-    const char* p = name;
-    while(*p) {
-        while(*p == '/' || *p == '\\') p++;
-        const char* start = p;
-        while(*p && *p != '/' && *p != '\\') p++;
-        if((p - start) == 2 && start[0] == '.' && start[1] == '.') return false;
+    FuriString* trimmed = furi_string_alloc_set(name);
+    furi_string_trim(trimmed);
+    furi_string_trim(trimmed, "/");
+
+    bool safe = true;
+    const char* p = furi_string_get_cstr(trimmed);
+    while(safe && *p) {
+        while(*p == '/' || *p == '\\')
+            p++;
+        size_t dots = 0;
+        bool only_dots_and_blanks = true;
+        for(; *p && *p != '/' && *p != '\\'; p++) {
+            const unsigned char c = (unsigned char)*p;
+            if(c < 0x20 || c == 0x7f) {
+                safe = false;
+                break;
+            }
+            if(c == '.') {
+                dots++;
+            } else if(c != ' ' && c != '\t') {
+                only_dots_and_blanks = false;
+            }
+        }
+        if(only_dots_and_blanks && dots >= 2) safe = false;
     }
-    return true;
+
+    furi_string_free(trimmed);
+    return safe;
 }
 
 // Blocking unpack (mirrors how the OTA updater / storage_cli extract). Runs while
@@ -118,11 +143,7 @@ bool archive_scene_extract_on_event(void* context, SceneManagerEvent event) {
             widget_add_text_box_element(
                 app->widget, 0, 0, 128, 40, AlignCenter, AlignCenter, result_str, false);
             widget_add_button_element(
-                app->widget,
-                GuiButtonTypeCenter,
-                "OK",
-                archive_scene_extract_button_callback,
-                app);
+                app->widget, GuiButtonTypeCenter, "OK", archive_scene_extract_button_callback, app);
             view_dispatcher_switch_to_view(app->view_dispatcher, ArchiveViewWidget);
 
             scene_manager_set_scene_state(
