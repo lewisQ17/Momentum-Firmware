@@ -58,15 +58,25 @@ static void edit_dialog_callback(DialogExResult result, void* context) {
         if(result == DialogExResultRight) {
             FURI_LOG_D(TAG, "Save: DialogExResultRight -> save and menu");
             File* file = storage_file_alloc(app->storage);
+            bool save_ok = false;
             if(file && storage_file_open(file, furi_string_get_cstr(app->playlist_path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-                for(size_t i = 0; i < app->playlist_entry_count; ++i) {
-                    storage_file_write(file, "sub: ", 5);
-                    storage_file_write(file, app->playlist_entries[i], strlen(app->playlist_entries[i]));
-                    storage_file_write(file, "\n", 1);
+                save_ok = true;
+                for(size_t i = 0; i < app->playlist_entry_count && save_ok; ++i) {
+                    size_t len = strlen(app->playlist_entries[i]);
+                    save_ok = storage_file_write(file, "sub: ", 5) == 5 &&
+                              storage_file_write(file, app->playlist_entries[i], len) == len &&
+                              storage_file_write(file, "\n", 1) == 1;
                 }
                 storage_file_close(file);
             }
             if(file) storage_file_free(file);
+            if(!save_ok) {
+                // keep the entries so the user does not lose the playlist
+                FURI_LOG_E(TAG, "Save: failed to write playlist");
+                scene_popup_show(app, "Error", "Failed to save playlist");
+                playlist_edit_dialog_type = PlaylistEditDialog_None;
+                return;
+            }
             app->playlist_modified = false;
             for(size_t i = 0; i < app->playlist_entry_count; ++i) {
                 free(app->playlist_entries[i]);
@@ -141,6 +151,7 @@ static void playlist_edit_submenu_callback(void* context, uint32_t index) {
         playlist_edit_dialog_type = PlaylistEditDialog_Save;
     } else {
         FURI_LOG_D(TAG, "Entry selected for delete, showing dialog");
+        playlist_edit_selected_index = index;
         scene_dialog_show_custom(
             app,
             "Delete entry?",
