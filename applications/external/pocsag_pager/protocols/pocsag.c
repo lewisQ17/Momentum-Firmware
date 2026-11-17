@@ -33,6 +33,8 @@ static const SubGhzBlockConst pocsag2400_const = {
 #define POCSAG_FUNC_ALERT2 2
 #define POCSAG_FUNC_ALPHANUM 3
 
+#define POCSAG_MSG_MAX_LEN 512 // cap per message / accumulated text, bounds heap growth on long streams
+
 static const char* func_msg[] = {"\e#Num:\e# ", "\e#Alert\e#", "\e#Alert:\e# ", "\e#Msg:\e# "};
 static const char* bcd_chars = "*U -)(";
 
@@ -133,7 +135,9 @@ static bool decode_message_alphanumeric(SubGhzProtocolDecoderPocsag* instance, u
         instance->char_bits++;
         if(instance->char_bits == 7) {
             if(instance->char_data == 0) return false;
-            furi_string_push_back(instance->msg, instance->char_data);
+            if(furi_string_size(instance->msg) < POCSAG_MSG_MAX_LEN) {
+                furi_string_push_back(instance->msg, instance->char_data);
+            }
             instance->char_data = 0;
             instance->char_bits = 0;
         }
@@ -155,7 +159,9 @@ static void decode_message_numeric(SubGhzProtocolDecoderPocsag* instance, uint32
             val += '0';
         else
             val = bcd_chars[val - 10];
-        furi_string_push_back(instance->msg, val);
+        if(furi_string_size(instance->msg) < POCSAG_MSG_MAX_LEN) {
+            furi_string_push_back(instance->msg, val);
+        }
     }
 }
 
@@ -183,13 +189,18 @@ static void pocsag_message_done(SubGhzProtocolDecoderPocsag* instance) {
         instance->version,
         instance->ric);
     furi_string_cat_str(instance->generic.result_ric, func_msg[instance->func]);
-    if(instance->func != POCSAG_FUNC_ALERT1) {
-        furi_string_cat(instance->done_msg, instance->msg);
+    size_t done_old_size = furi_string_size(instance->done_msg);
+    if(done_old_size < POCSAG_MSG_MAX_LEN) {
+        if(instance->func != POCSAG_FUNC_ALERT1) {
+            furi_string_cat(instance->done_msg, instance->msg);
+        }
+
+        furi_string_cat_str(instance->done_msg, " ");
+
+        // only append the newly finished message, done_msg is cumulative
+        furi_string_cat_str(
+            instance->generic.result_msg, furi_string_get_cstr(instance->done_msg) + done_old_size);
     }
-
-    furi_string_cat_str(instance->done_msg, " ");
-
-    furi_string_cat(instance->generic.result_msg, instance->done_msg);
 
     // reset the state
     instance->char_bits = 0;
