@@ -11,6 +11,39 @@ static char *app_ids[8] = {
     "flip_world"};
 
 // Function to save the playlist
+// Append str to out as a JSON string body: escapes '"' and '\\', control characters become spaces
+static void json_cat_escaped(FuriString *out, const char *str)
+{
+    for (; *str; str++)
+    {
+        char c = *str;
+        if (c == '"' || c == '\\')
+        {
+            furi_string_push_back(out, '\\');
+        }
+        else if ((unsigned char)c < 0x20)
+        {
+            c = ' ';
+        }
+        furi_string_push_back(out, c);
+    }
+}
+
+// Undo json_cat_escaped() for the two escapes it writes (\" and \\)
+static void json_unescape_inplace(char *str)
+{
+    char *w = str;
+    for (char *r = str; *r; r++)
+    {
+        if (*r == '\\' && (r[1] == '"' || r[1] == '\\'))
+        {
+            r++;
+        }
+        *w++ = *r;
+    }
+    *w = '\0';
+}
+
 void save_playlist(WiFiPlaylist *playlist)
 {
     if (!playlist)
@@ -64,7 +97,11 @@ void save_playlist(WiFiPlaylist *playlist)
     furi_string_cat(json_result, "{\"ssids\":[\n");
     for (size_t i = 0; i < playlist->count; i++)
     {
-        furi_string_cat_printf(json_result, "{\"ssid\":\"%s\",\"password\":\"%s\"}", playlist->ssids[i], playlist->passwords[i]);
+        furi_string_cat(json_result, "{\"ssid\":\"");
+        json_cat_escaped(json_result, playlist->ssids[i]);
+        furi_string_cat(json_result, "\",\"password\":\"");
+        json_cat_escaped(json_result, playlist->passwords[i]);
+        furi_string_cat(json_result, "\"}");
         if (i < playlist->count - 1)
         {
             furi_string_cat(json_result, ",\n");
@@ -113,11 +150,17 @@ bool load_playlist(WiFiPlaylist *playlist)
         if (!ssid || !password)
         {
             FURI_LOG_E(TAG, "Failed to get SSID or Password from JSON");
+            if (ssid)
+                furi_string_free(ssid);
+            if (password)
+                furi_string_free(password);
             furi_string_free(json_data);
             break;
         }
         snprintf(playlist->ssids[i], MAX_SSID_LENGTH, "%s", furi_string_get_cstr(ssid));
         snprintf(playlist->passwords[i], MAX_SSID_LENGTH, "%s", furi_string_get_cstr(password));
+        json_unescape_inplace(playlist->ssids[i]);
+        json_unescape_inplace(playlist->passwords[i]);
         playlist->count++;
         furi_string_free(json_data);
         furi_string_free(ssid);
@@ -218,14 +261,20 @@ void save_settings(const char *ssid, const char *password)
                 size_t existing_ssid_length;
                 memcpy(&existing_ssid_length, buffer, sizeof(size_t));
 
-                // Parse existing Password length
-                if (file_size >= sizeof(size_t) + existing_ssid_length + sizeof(size_t))
+                // Parse existing Password length (compare by subtraction: the lengths come from the file and must not wrap)
+                if (existing_ssid_length <= file_size - sizeof(size_t) &&
+                    file_size - sizeof(size_t) - existing_ssid_length >= sizeof(size_t))
                 {
                     size_t existing_password_length;
                     memcpy(&existing_password_length, buffer + sizeof(size_t) + existing_ssid_length, sizeof(size_t));
 
                     // Calculate the offset where additional data starts
-                    size_t additional_offset = sizeof(size_t) + existing_ssid_length + sizeof(size_t) + existing_password_length;
+                    size_t after_ssid = sizeof(size_t) + existing_ssid_length + sizeof(size_t);
+                    size_t additional_offset = file_size; // invalid password length: no additional data
+                    if (existing_password_length <= file_size - after_ssid)
+                    {
+                        additional_offset = after_ssid + existing_password_length;
+                    }
                     if (additional_offset < file_size)
                     {
                         additional_data_size = file_size - additional_offset;
@@ -416,7 +465,7 @@ bool load_char(
     }
 
     // Ensure null-termination
-    value[read_count - 1] = '\0';
+    value[read_count > 0 ? read_count - 1 : 0] = '\0';
 
     storage_file_close(file);
     storage_file_free(file);

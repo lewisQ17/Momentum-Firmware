@@ -663,7 +663,9 @@ void callback_submenu_choices(void *context, uint32_t index)
             int32_t loading_view_id = 87654321; // Random ID
             view_dispatcher_add_view(app->view_dispatcher, loading_view_id, loading_get_view(loading));
             view_dispatcher_switch_to_view(app->view_dispatcher, loading_view_id);
-            while (app->fhttp->state != IDLE)
+            // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+            uint32_t http_wait_start = furi_get_tick();
+            while ((app->fhttp->state == RECEIVING || app->fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
             {
                 furi_delay_ms(100);
             }
