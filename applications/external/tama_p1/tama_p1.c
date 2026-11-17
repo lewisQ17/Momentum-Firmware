@@ -474,6 +474,9 @@ static void tama_p1_update_timer_callback(void* ctx) {
     furi_message_queue_put(event_queue, &event, 0);
 }
 
+#define TAMA_ROM_MAX_BYTES (6144 * 2)
+static size_t tama_rom_words = 0;
+
 static void tama_p1_load_state() {
     state_t* state;
     uint8_t buf[4];
@@ -500,6 +503,7 @@ static void tama_p1_load_state() {
 
             storage_file_read(file, &buf, 2);
             *(state->pc) = buf[0] | ((buf[1] & 0x1F) << 8);
+            if(*(state->pc) >= tama_rom_words) *(state->pc) = 0; // must stay inside the ROM
 
             storage_file_read(file, &buf, 2);
             *(state->x) = buf[0] | ((buf[1] & 0xF) << 8);
@@ -727,7 +731,9 @@ static void tama_p1_init(TamaApp* const ctx) {
     FileInfo fi;
     if(storage_common_stat(storage, TAMA_ROM_PATH, &fi) == FSE_OK) {
         File* rom_file = storage_file_alloc(storage);
-        if(storage_file_open(rom_file, TAMA_ROM_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        // ROM is 16-bit words (12 bit used): an even size, at most 12288 bytes (6144 words)
+        if(fi.size >= 2 && fi.size <= TAMA_ROM_MAX_BYTES && (fi.size % 2) == 0 &&
+           storage_file_open(rom_file, TAMA_ROM_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
             ctx->rom = malloc((size_t)fi.size);
             uint8_t* buf_ptr = ctx->rom;
             size_t read = 0;
@@ -735,15 +741,22 @@ static void tama_p1_init(TamaApp* const ctx) {
                 size_t to_read = fi.size - read;
                 if(to_read > UINT16_MAX) to_read = UINT16_MAX;
                 uint16_t now_read = storage_file_read(rom_file, buf_ptr, (uint16_t)to_read);
+                if(now_read == 0) break; // I/O error or file shortened: do not spin forever
                 read += now_read;
                 buf_ptr += now_read;
             }
 
-            // Reorder endianess of ROM
-            for(size_t i = 0; i < fi.size; i += 2) {
-                uint8_t b = ctx->rom[i];
-                ctx->rom[i] = ctx->rom[i + 1];
-                ctx->rom[i + 1] = b & 0xF;
+            if(read < fi.size) {
+                free(ctx->rom);
+                ctx->rom = NULL;
+            } else {
+                tama_rom_words = fi.size / 2;
+                // Reorder endianess of ROM
+                for(size_t i = 0; i < fi.size; i += 2) {
+                    uint8_t b = ctx->rom[i];
+                    ctx->rom[i] = ctx->rom[i + 1];
+                    ctx->rom[i + 1] = b & 0xF;
+                }
             }
         }
 
