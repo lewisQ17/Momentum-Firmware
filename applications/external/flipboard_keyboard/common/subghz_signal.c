@@ -93,6 +93,16 @@ static void send_signal(
     subghz_environment_set_protocol_registry(environment, (void*)&subghz_protocol_registry);
 #endif
     SubGhzTransmitter* transmitter = subghz_transmitter_alloc_init(environment, protocol);
+    if(transmitter == NULL) {
+        // no encoder for this protocol (decode-only or unknown): nothing to send
+        FURI_LOG_E(TAG, "No transmitter for protocol %s", protocol);
+        subghz_devices_deinit();
+        if(enable_5v) {
+            subghz_radio_device_power_off();
+        }
+        subghz_environment_free(environment);
+        return;
+    }
     FlipperFormat* flipper_format = flipper_format_string_alloc();
     __flipper_format_populate(flipper_format, sub_file_contents);
     subghz_transmitter_deserialize(transmitter, flipper_format);
@@ -249,20 +259,26 @@ SubGhzSignal* subghz_signal_load_file(char* file_path) {
         File* file = storage_file_alloc(storage);
         if(storage_file_open(file, file_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
             uint64_t file_size = storage_file_size(file);
-            char* file_contents = (char*)malloc(file_size + 1);
-            if(storage_file_read(file, file_contents, file_size) == file_size) {
-                file_contents[file_size] = '\0';
-                furi_string_set(signal->sub_file_contents, file_contents);
-            } else {
-                FURI_LOG_E(TAG, "Error reading file %s", file_path);
+            if(file_size > 32768) { // a key .sub file is tiny: do not try to load a huge one
+                FURI_LOG_E(TAG, "File too large %s", file_path);
                 parsed = false;
+            } else {
+                char* file_contents = (char*)malloc(file_size + 1);
+                if(storage_file_read(file, file_contents, file_size) == file_size) {
+                    file_contents[file_size] = '\0';
+                    furi_string_set(signal->sub_file_contents, file_contents);
+                } else {
+                    FURI_LOG_E(TAG, "Error reading file %s", file_path);
+                    parsed = false;
+                }
+                free(file_contents);
             }
-            free(file_contents);
             storage_file_close(file);
         } else {
             FURI_LOG_E(TAG, "Error open file %s", file_path);
             parsed = false;
         }
+        storage_file_free(file);
     }
 
     furi_string_free(temp_str);

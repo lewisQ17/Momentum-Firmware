@@ -59,6 +59,11 @@ bool infrared_signal_load_next(InfraredSignal* signal) {
     bool parsed = false;
     signal->message.protocol = InfraredProtocolUnknown;
     signal->timings_count = 0;
+    if(signal->timings) {
+        // left over from the previous signal in this file
+        free(signal->timings);
+        signal->timings = NULL;
+    }
 
     do {
         do {

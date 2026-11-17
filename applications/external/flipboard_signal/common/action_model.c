@@ -555,11 +555,12 @@ static void action_model_load_fields(ActionModel* model, FlipperFormat* flipper_
 
     if(flipper_format_read_uint32(flipper_format, "KeystrokeCount", &data32, 1)) {
         uint16_t num_entries = (uint16_t)data32;
-        if(num_entries != 0) {
+        // keystrokes_count is a uint8_t: more entries cannot be stored (and would never end the loop)
+        if(num_entries != 0 && num_entries <= UINT8_MAX) {
             uint16_t num_ints = num_entries * 2;
             uint32_t* info = malloc(sizeof(uint32_t) * num_ints);
             if(flipper_format_read_uint32(flipper_format, "Keystrokes", info, num_ints)) {
-                for(uint8_t i = 0; i < num_entries; i++) {
+                for(uint16_t i = 0; i < num_entries; i++) {
                     if(info[i * 2]) {
                         action_model_append_keystroke(model, info[i * 2], info[i * 2 + 1]);
                     }
