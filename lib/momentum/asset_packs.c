@@ -301,6 +301,11 @@ const Icon* asset_packs_swap_icon(const Icon* requested) {
 #define ASSET_PACKS_ICON_MAX_W 128
 #define ASSET_PACKS_ICON_MAX_H 64
 
+// Upper bound for one frame blob, checked BEFORE allocating (furi malloc aborts on
+// OOM). Largest valid frame is 1 + 16 * 64 = 1025 B uncompressed; a compressed
+// frame is not larger than that plus a small header/overhead.
+#define ASSET_PACKS_ICON_MAX_FRAME_SIZE 2048
+
 static bool asset_packs_icon_dims_valid(int32_t width, int32_t height) {
     return width > 0 && height > 0 && width <= ASSET_PACKS_ICON_MAX_W &&
            height <= ASSET_PACKS_ICON_MAX_H;
@@ -333,7 +338,8 @@ static Icon* asset_packs_load_static_file(File* file, const char* path) {
     }
     Icon* result = NULL;
     uint64_t file_size = storage_file_size(file);
-    if(file_size >= sizeof(StaticIconBmxHeader)) {
+    if(file_size >= sizeof(StaticIconBmxHeader) &&
+       file_size - sizeof(StaticIconBmxHeader) <= ASSET_PACKS_ICON_MAX_FRAME_SIZE) {
         uint64_t frame_size = file_size - sizeof(StaticIconBmxHeader);
         StaticIconSwap* swap = malloc(sizeof(StaticIconSwap) + frame_size);
         StaticIconBmxHeader header;
@@ -382,10 +388,15 @@ static Icon* asset_packs_load_animated_dir(File* file, FuriString* scratch, cons
         furi_string_printf(scratch, "%s/frame_%02d.bm", dir, i);
         if(storage_file_open(file, furi_string_get_cstr(scratch), FSAM_READ, FSOM_OPEN_EXISTING)) {
             uint64_t frame_size = storage_file_size(file);
-            swap->frames[i] = malloc(frame_size);
-            ok =
-                storage_file_read(file, swap->frames[i], frame_size) == frame_size &&
-                asset_packs_icon_frame_valid(swap->frames[i], frame_size, meta.width, meta.height);
+            if(frame_size > ASSET_PACKS_ICON_MAX_FRAME_SIZE) {
+                swap->frames[i] = NULL; // freed in the unwind below
+                ok = false;
+            } else {
+                swap->frames[i] = malloc(frame_size);
+                ok = storage_file_read(file, swap->frames[i], frame_size) == frame_size &&
+                     asset_packs_icon_frame_valid(
+                         swap->frames[i], frame_size, meta.width, meta.height);
+            }
             storage_file_close(file);
             if(ok) continue;
         } else {
