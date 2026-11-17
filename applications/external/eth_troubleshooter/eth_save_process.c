@@ -112,7 +112,12 @@ static bool storage_write_config(File* file, const EthernetSaveConfig* cfg) {
     return result;
 }
 
-static void read_02X(const char* str, uint8_t* byte) {
+// len is the number of readable characters at str, shorter input leaves *byte untouched
+static void read_02X(const char* str, size_t len, uint8_t* byte) {
+    if(len < 2) {
+        return;
+    }
+
     uint8_t b[2] = {str[0], str[1]};
 
     for(int i = 0; i < 2; ++i) {
@@ -128,11 +133,12 @@ static void read_02X(const char* str, uint8_t* byte) {
     *byte = b[1] + (b[0] << 4);
 }
 
-static void read_ip(const char* str, uint8_t* ip) {
+// len is the number of characters at str before the terminating '\0'
+static void read_ip(const char* str, size_t len, uint8_t* ip) {
     uint8_t ip_i = 0;
-    uint8_t i = 0;
+    size_t i = 0;
     uint16_t tmp = 0;
-    for(;;) {
+    while(i <= len) {
         if('0' <= str[i] && str[i] <= '9') {
             tmp = tmp * 10 + str[i] - '0';
         } else if(str[i] == '.' || str[i] != '\n' || str[i] != '\0') {
@@ -177,23 +183,25 @@ bool storage_read_config(File* file, EthernetSaveConfig* cfg) {
 
     while(storage_read_line(file, fstring)) {
         const char* str = furi_string_get_cstr(fstring);
+        const size_t line_len = furi_string_size(fstring);
         if(!strncmp(str, "mac: ", 5)) {
-            read_02X(str + strlen("mac: "), &cfg->mac[0]);
-            read_02X(str + strlen("mac: XX-"), &cfg->mac[1]);
-            read_02X(str + strlen("mac: XX-XX-"), &cfg->mac[2]);
-            read_02X(str + strlen("mac: XX-XX-XX-"), &cfg->mac[3]);
-            read_02X(str + strlen("mac: XX-XX-XX-XX-"), &cfg->mac[4]);
-            read_02X(str + strlen("mac: XX-XX-XX-XX-XX-"), &cfg->mac[5]);
+            for(size_t k = 0; k < 6; k++) {
+                // "mac: " followed by XX-XX-XX-XX-XX-XX
+                const size_t offset = strlen("mac: ") + k * 3;
+                if(offset < line_len) {
+                    read_02X(str + offset, line_len - offset, &cfg->mac[k]);
+                }
+            }
         } else if(!strncmp(str, "ip: ", 4)) {
-            read_ip(str + strlen("ip: "), cfg->ip);
+            read_ip(str + strlen("ip: "), line_len - strlen("ip: "), cfg->ip);
         } else if(!strncmp(str, "mask: ", 6)) {
-            read_ip(str + strlen("mask: "), cfg->mask);
+            read_ip(str + strlen("mask: "), line_len - strlen("mask: "), cfg->mask);
         } else if(!strncmp(str, "gateway: ", 9)) {
-            read_ip(str + strlen("gateway: "), cfg->gateway);
+            read_ip(str + strlen("gateway: "), line_len - strlen("gateway: "), cfg->gateway);
         } else if(!strncmp(str, "dns: ", 5)) {
-            read_ip(str + strlen("dns: "), cfg->dns);
+            read_ip(str + strlen("dns: "), line_len - strlen("dns: "), cfg->dns);
         } else if(!strncmp(str, "ping_ip: ", 9)) {
-            read_ip(str + strlen("ping_ip: "), cfg->ping_ip);
+            read_ip(str + strlen("ping_ip: "), line_len - strlen("ping_ip: "), cfg->ping_ip);
         }
     }
 
