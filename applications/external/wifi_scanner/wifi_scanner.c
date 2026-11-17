@@ -726,7 +726,10 @@ static int32_t uart_worker(void* context) {
 
                     WIFI_APP_LOG_I("String chunk: %s", furi_string_get_cstr(chunk));
 
-                    furi_string_set(chunksArray[index++], chunk);
+                    // extra '+' separators (e.g. in an SSID) must not run past the array
+                    if(index < EChunkArrayData_ENUM_MAX) {
+                        furi_string_set(chunksArray[index++], chunk);
+                    }
 
                     begin = end + 1;
                 } while(end < stringSize);
