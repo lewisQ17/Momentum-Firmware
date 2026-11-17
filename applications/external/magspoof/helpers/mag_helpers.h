@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
+// Capacity of the encode buffers (all callers must use these sizes, mag_encode() stops at the limit)
+#define MAG_RAW_BYTES        96
+#define MAG_MANCHESTER_BYTES (MAG_RAW_BYTES * 2)
+
 void play_halfbit(bool value, MagState* state);
 void play_track(uint8_t* bits_manchester, uint16_t n_bits, MagState* state, bool reverse);
 

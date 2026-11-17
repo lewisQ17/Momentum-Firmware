@@ -286,6 +286,9 @@ void mag_spoof(Mag* mag) {
     strncpy(data1, furi_string_get_cstr(ft1), furi_string_size(ft1));
     strncpy(data2, furi_string_get_cstr(ft2), furi_string_size(ft2));
     strncpy(data3, furi_string_get_cstr(ft3), furi_string_size(ft3));
+    data1[furi_string_size(ft1)] = '\0';
+    data2[furi_string_size(ft2)] = '\0';
+    data3[furi_string_size(ft3)] = '\0';
 
     if(furi_log_get_level() >= FuriLogLevelDebug) {
         debug_mag_string(data1, bitlen[0], sublen[0]);
@@ -293,16 +296,16 @@ void mag_spoof(Mag* mag) {
         debug_mag_string(data3, bitlen[2], sublen[2]);
     }
 
-    uint8_t bits_t1_raw[64] = {0x00}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
-    uint8_t bits_t1_manchester[128] = {0x00}; // twice the above
+    uint8_t bits_t1_raw[MAG_RAW_BYTES] = {0x00}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
+    uint8_t bits_t1_manchester[MAG_MANCHESTER_BYTES] = {0x00}; // twice the above
     uint16_t bits_t1_count = mag_encode(
         data1, (uint8_t*)bits_t1_manchester, (uint8_t*)bits_t1_raw, bitlen[0], sublen[0]);
-    uint8_t bits_t2_raw[64] = {0x00}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
-    uint8_t bits_t2_manchester[128] = {0x00}; // twice the above
+    uint8_t bits_t2_raw[MAG_RAW_BYTES] = {0x00}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
+    uint8_t bits_t2_manchester[MAG_MANCHESTER_BYTES] = {0x00}; // twice the above
     uint16_t bits_t2_count = mag_encode(
         data2, (uint8_t*)bits_t2_manchester, (uint8_t*)bits_t2_raw, bitlen[1], sublen[1]);
-    uint8_t bits_t3_raw[64] = {0x00};
-    uint8_t bits_t3_manchester[128] = {0x00};
+    uint8_t bits_t3_raw[MAG_RAW_BYTES] = {0x00};
+    uint8_t bits_t3_manchester[MAG_MANCHESTER_BYTES] = {0x00};
     uint16_t bits_t3_count = mag_encode(
         data3, (uint8_t*)bits_t3_manchester, (uint8_t*)bits_t3_raw, bitlen[2], sublen[2]);
 
@@ -432,6 +435,8 @@ uint16_t mag_encode(
     }*/
 
     for(int i = 0; *(data + i) != 0; i++) {
+        // stop (truncate) when this char plus the LRC would not fit the caller's buffer
+        if(raw_bits_count + 2 * track_bits > MAG_RAW_BYTES * 8) break;
         crc = 1;
         tmp = *(data + i) - track_ascii_offset;
 
@@ -462,8 +467,8 @@ uint16_t mag_encode(
 }
 
 void debug_mag_string(char* data, uint8_t track_bits, uint8_t track_ascii_offset) {
-    uint8_t bits_raw[64] = {0}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
-    uint8_t bits_manchester[128] = {0}; // twice the above
+    uint8_t bits_raw[MAG_RAW_BYTES] = {0}; // 68 chars max track 1 + 1 char crc * 7 approx =~ 483 bits
+    uint8_t bits_manchester[MAG_MANCHESTER_BYTES] = {0}; // twice the above
     int numbits = 0;
 
     printf("Encoding [%s] with %d bits\r\n", data, track_bits);
