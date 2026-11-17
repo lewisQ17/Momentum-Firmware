@@ -26,9 +26,12 @@ void weebo_scene_save_name_on_enter(void* context) {
         file_name_empty = true;
     } else {
         // Add "_" suffix to make name unique
-        weebo->file_name[strlen(weebo->file_name)] = '_';
-        weebo->file_name[strlen(weebo->file_name)] = '\0';
-        weebo_text_store_set(weebo, weebo->file_name);
+        size_t name_len = strlen(weebo->file_name);
+        if(name_len < WEEBO_FILE_NAME_MAX_LENGTH) {
+            weebo->file_name[name_len] = '_';
+            weebo->file_name[name_len + 1] = '\0';
+        }
+        weebo_text_store_set(weebo, "%s", weebo->file_name);
     }
     text_input_set_header_text(text_input, "Name the card");
     text_input_set_result_callback(

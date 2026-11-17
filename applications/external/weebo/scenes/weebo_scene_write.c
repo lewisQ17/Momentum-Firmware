@@ -72,6 +72,7 @@ NfcCommand weebo_scene_write_poller_callback(NfcGenericEvent event, void* contex
         // You might think it odd that I'm doing this writing "by hand" and not using the flipper SDK, but this is for two reasons:
         // 1. The flipper SDK doesn't write beyond user memory
         // 2. I order the writes from least destructive to most destructive, so that if something goes wrong, recovery _might_ be possible
+        bool write_ok = false;
         do {
             // user data
             FURI_LOG_D(TAG, "Writing user data");
@@ -174,9 +175,13 @@ NfcCommand weebo_scene_write_poller_callback(NfcGenericEvent event, void* contex
                 ret = NfcCommandStop;
                 break;
             }
+            write_ok = true;
         } while(false);
         ret = NfcCommandStop;
-        view_dispatcher_send_custom_event(weebo->view_dispatcher, WeeboCustomEventWriteSuccess);
+        if(write_ok) {
+            view_dispatcher_send_custom_event(
+                weebo->view_dispatcher, WeeboCustomEventWriteSuccess);
+        }
     } else {
         FURI_LOG_D(TAG, "Unhandled event type: %d", mf_ultralight_event->type);
     }
