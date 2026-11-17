@@ -243,6 +243,7 @@ static bool iso15693_load_from_file(Iso15693App* app, const char* filepath) {
         FuriString* line = furi_string_alloc();
         char buffer[1];
         int b = 0;
+        bool header_ok = true;
 
         while(true) {
             furi_string_reset(line);
@@ -262,8 +263,13 @@ static bool iso15693_load_from_file(Iso15693App* app, const char* filepath) {
             if(s[0] == '#') {
                 int count, size;
                 if(sscanf(s, "# Blocks: %d, Size: %d", &count, &size) == 2) {
+                     if(count < 1 || count > MAX_TAG_BLOCKS || size < 1 ||
+                        size > MAX_TAG_BLOCK_SIZE) {
+                         // reject: out-of-range values would index past full_tag_data
+                         header_ok = false;
+                         break;
+                     }
                      app->actual_block_count = (uint16_t)count;
-                     if(size > MAX_TAG_BLOCK_SIZE) size = MAX_TAG_BLOCK_SIZE;
                      app->actual_block_size = (uint8_t)size;
                 }
                 continue;
@@ -289,10 +295,10 @@ static bool iso15693_load_from_file(Iso15693App* app, const char* filepath) {
             }
         }
         
-        if(app->actual_block_count == 0) app->actual_block_count = b;
+        if(app->actual_block_count == 0) app->actual_block_count = (b > MAX_TAG_BLOCKS) ? MAX_TAG_BLOCKS : b;
         
         furi_string_free(line);
-        ok = true;
+        ok = header_ok;
     }
     storage_file_close(file);
     storage_file_free(file);
