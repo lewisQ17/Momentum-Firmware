@@ -51,19 +51,36 @@ static void scheduler_subghz_need_save_callback(void* context) {
     Stream* ff_stream = flipper_format_get_raw_stream(ff);
     flipper_format_delete_key(ff, "Repeat");
 
+    FuriString* tmp_path = furi_string_alloc_printf("%s.tmp", savectx->file_path);
     do {
-        if(!storage_simply_remove(savectx->tx_run->storage, savectx->file_path)) {
-            FURI_LOG_E(TAG, "Failed to delete subghz file before re-save");
+        // write to a temp file first, so the original capture survives a failed save
+        stream_seek(ff_stream, 0, StreamOffsetFromStart);
+        if(stream_save_to_file(
+               ff_stream,
+               savectx->tx_run->storage,
+               furi_string_get_cstr(tmp_path),
+               FSOM_CREATE_ALWAYS) == 0) {
+            FURI_LOG_E(TAG, "Failed to write temporary subghz file");
+            storage_simply_remove(savectx->tx_run->storage, furi_string_get_cstr(tmp_path));
             break;
         }
-        stream_seek(ff_stream, 0, StreamOffsetFromStart);
-        stream_save_to_file(
-            ff_stream, savectx->tx_run->storage, savectx->file_path, FSOM_CREATE_ALWAYS);
+        if(!storage_simply_remove(savectx->tx_run->storage, savectx->file_path)) {
+            FURI_LOG_E(TAG, "Failed to delete subghz file before re-save");
+            storage_simply_remove(savectx->tx_run->storage, furi_string_get_cstr(tmp_path));
+            break;
+        }
+        if(storage_common_rename(
+               savectx->tx_run->storage, furi_string_get_cstr(tmp_path), savectx->file_path) !=
+           FSE_OK) {
+            FURI_LOG_E(TAG, "Failed to move re-saved subghz file into place");
+            break;
+        }
         if(storage_common_stat(savectx->tx_run->storage, savectx->file_path, NULL) != FSE_OK) {
             FURI_LOG_E(TAG, "Error verifying new subghz file after re-save");
             break;
         }
     } while(0);
+    furi_string_free(tmp_path);
 }
 
 static void scheduler_subghz_raw_end_callback(void* context) {
@@ -279,18 +296,20 @@ static int32_t scheduler_tx(void* context) {
         flipper_format_file_close(fff_data_file);
         flipper_format_free(fff_data_file);
         uint8_t repeats = scheduler_get_tx_repeats(app->scheduler);
-        for(uint_fast8_t i = 0; i <= repeats; ++i) {
+        for(uint16_t i = 0; i <= repeats; ++i) {
             notification_message(app->notifications, &sequence_blink_stop);
             notification_message(app->notifications, &sequence_blink_start_cyan);
 
+            bool tx_started = true;
             if(subghz_txrx_tx_start(txrx, subghz_txrx_get_fff_data(txrx)) !=
                SubGhzTxRxStartTxStateOk) {
                 FURI_LOG_E(TAG, "Failed to start TX");
+                tx_started = false;
             }
 
             bool skip_extra_stop = false;
             FURI_LOG_D(TAG, "Checking if file is RAW...");
-            if(!strcmp(furi_string_get_cstr(protocol_name), "RAW")) {
+            if(tx_started && !strcmp(furi_string_get_cstr(protocol_name), "RAW")) {
                 subghz_txrx_set_raw_file_encoder_worker_callback_end(
                     txrx, scheduler_subghz_raw_end_callback, tx_run);
                 tx_run->raw_file_is_tx = true;
