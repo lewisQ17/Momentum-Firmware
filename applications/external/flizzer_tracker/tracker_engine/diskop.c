@@ -65,6 +65,15 @@ void load_instrument_inner(Stream* stream, Instrument* inst, uint8_t version) {
     UNUSED(rwops);
 }
 
+// The editor and engine always expect instrument 0 to exist
+static void ensure_default_instrument(TrackerSong* song) {
+    if(song->num_instruments == 0) {
+        song->instrument[0] = (Instrument*)malloc(sizeof(Instrument));
+        set_default_instrument(song->instrument[0]);
+        song->num_instruments = 1;
+    }
+}
+
 bool load_song_inner(TrackerSong* song, Stream* stream) {
     uint8_t version = 0;
     size_t rwops = stream_read(stream, (uint8_t*)&version, sizeof(version));
@@ -122,6 +131,7 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
 
     if(song->num_instruments > MAX_INSTRUMENTS) {
         song->num_instruments = 0;
+        ensure_default_instrument(song);
         return false;
     }
 
@@ -139,6 +149,8 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
         set_default_instrument(song->instrument[i]);
         load_instrument_inner(stream, song->instrument[i], version);
     }
+
+    ensure_default_instrument(song);
 
     UNUSED(rwops);
     return false;
