@@ -55,8 +55,11 @@ bool spi_mem_file_read_block(SPIMemApp* app, uint8_t* data, size_t size) {
 }
 
 void spi_mem_file_close(SPIMemApp* app) {
+    // the worker calls this even when the file was never opened (chip busy/missing)
+    if(!app->file) return;
     storage_file_close(app->file);
     storage_file_free(app->file);
+    app->file = NULL;
 }
 
 size_t spi_mem_file_get_size(SPIMemApp* app) {
