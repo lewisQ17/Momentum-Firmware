@@ -213,6 +213,10 @@ static int32_t gps_reader_worker(void* context) {
                                     gps_reader->rx_buf[rx_offset++] = *(line_current++);
                                 }
                             }
+                            if(rx_offset >= GPS_RX_BUF_SIZE - 1) {
+                                // buffer full without a newline: drop it, else the parser wedges
+                                rx_offset = 0;
+                            }
                             break;
                         }
                     }

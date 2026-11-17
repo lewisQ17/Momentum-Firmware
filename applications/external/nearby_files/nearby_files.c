@@ -455,7 +455,13 @@ void nearby_files_add_file(
     // Expand capacity if needed
     if(app->file_count >= app->file_capacity) {
         app->file_capacity = app->file_capacity == 0 ? 16 : app->file_capacity * 2;
-        app->files = realloc(app->files, app->file_capacity * sizeof(NearbyFileItem));
+        NearbyFileItem* grown = realloc(app->files, app->file_capacity * sizeof(NearbyFileItem));
+        if(grown == NULL) {
+            // out of memory: keep the existing list, skip this file
+            app->file_capacity = app->file_count;
+            return;
+        }
+        app->files = grown;
     }
 
     // Add new file
@@ -616,50 +622,58 @@ bool nearby_files_parse_coordinates(const char* file_path, double* latitude, dou
         return false;
     }
 
-    char buffer[256];
+    char buffer[128];
     bool lat_found = false, lon_found = false;
+    size_t total_read = 0;
+    size_t chunk_len = 0;
+    const size_t max_scan = 4096; // coordinates are written near the top of the file
 
-    // Read file character by character to build lines
+    // Read the file in chunks (one storage IPC call per byte is far too slow) to build lines
     FuriString* line = furi_string_alloc();
 
-    while(storage_file_read(file, buffer, 1) == 1) {
-        if(buffer[0] == '\n' || buffer[0] == '\r') {
-            // Process the line
-            const char* line_str = furi_string_get_cstr(line);
+    while(!(lat_found && lon_found) && total_read < max_scan &&
+          (chunk_len = storage_file_read(file, buffer, sizeof(buffer))) > 0) {
+        total_read += chunk_len;
+        for(size_t ci = 0; ci < chunk_len; ci++) {
+            char ch = buffer[ci];
+            if(ch == '\n' || ch == '\r') {
+                // Process the line
+                const char* line_str = furi_string_get_cstr(line);
 
-            // Check for latitude keys
-            if(!lat_found) {
-                if(strncmp(line_str, "Lat: ", 5) == 0) {
-                    *latitude = strtod(line_str + 5, NULL);
-                    lat_found = true;
-                } else if(strncmp(line_str, "Latitude: ", 10) == 0) {
-                    *latitude = strtod(line_str + 10, NULL);
-                    lat_found = true;
-                } else if(strncmp(line_str, "Latitute: ", 10) == 0) { // Typo version
-                    *latitude = strtod(line_str + 10, NULL);
-                    lat_found = true;
+                // Check for latitude keys
+                if(!lat_found) {
+                    if(strncmp(line_str, "Lat: ", 5) == 0) {
+                        *latitude = strtod(line_str + 5, NULL);
+                        lat_found = true;
+                    } else if(strncmp(line_str, "Latitude: ", 10) == 0) {
+                        *latitude = strtod(line_str + 10, NULL);
+                        lat_found = true;
+                    } else if(strncmp(line_str, "Latitute: ", 10) == 0) { // Typo version
+                        *latitude = strtod(line_str + 10, NULL);
+                        lat_found = true;
+                    }
                 }
-            }
 
-            // Check for longitude keys
-            if(!lon_found) {
-                if(strncmp(line_str, "Lon: ", 5) == 0) {
-                    *longitude = strtod(line_str + 5, NULL);
-                    lon_found = true;
-                } else if(strncmp(line_str, "Longitude: ", 11) == 0) {
-                    *longitude = strtod(line_str + 11, NULL);
-                    lon_found = true;
+                // Check for longitude keys
+                if(!lon_found) {
+                    if(strncmp(line_str, "Lon: ", 5) == 0) {
+                        *longitude = strtod(line_str + 5, NULL);
+                        lon_found = true;
+                    } else if(strncmp(line_str, "Longitude: ", 11) == 0) {
+                        *longitude = strtod(line_str + 11, NULL);
+                        lon_found = true;
+                    }
                 }
+
+                // If both found, we can stop reading
+                if(lat_found && lon_found) break;
+
+                // Reset line for next iteration
+                furi_string_reset(line);
+            } else {
+                // Add character to current line (cap the line length)
+                if(furi_string_size(line) < 256) furi_string_push_back(line, ch);
             }
-
-            // If both found, we can stop reading
-            if(lat_found && lon_found) break;
-
-            // Reset line for next iteration
-            furi_string_reset(line);
-        } else {
-            // Add character to current line
-            furi_string_push_back(line, buffer[0]);
         }
     }
 
