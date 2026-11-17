@@ -45,6 +45,12 @@ AppState* app_state_alloc() {
                file, get_protocol_config_filename((LWCType)i), FSAM_READ, FSOM_OPEN_EXISTING)) {
             read = storage_file_read(file, state->proto_configs[i], sizeof(ProtoConfig)) ==
                    sizeof(ProtoConfig);
+            // the values are used as array indexes: reject a corrupt config
+            if(read && ((uint32_t)state->proto_configs[i]->run_mode >= __lwc_number_of_run_modes ||
+                        (uint32_t)state->proto_configs[i]->data_mode >= __lwc_number_of_data_modes ||
+                        (uint32_t)state->proto_configs[i]->data_pin >= __lwc_number_of_data_pins)) {
+                read = false;
+            }
         }
 
         if(!read) {
