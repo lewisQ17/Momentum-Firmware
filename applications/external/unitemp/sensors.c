@@ -368,10 +368,14 @@ bool unitemp_sensors_load(void* context) {
             char name[11] = {0};
             char model[11] = {0};
             int temp_offset = 0;
-            int str_offset;
+            int str_offset = -1;
 
             const char* line_cstr = furi_string_get_cstr(line);
-            sscanf(line_cstr, "%s %s %d %n", name, model, &temp_offset, &str_offset);
+            if(sscanf(line_cstr, "%10s %10s %d %n", name, model, &temp_offset, &str_offset) != 3 ||
+               str_offset < 0) {
+                FURI_LOG_E(APP_NAME, "Malformed sensors file line, skipped");
+                continue;
+            }
             char* args = ((char*)(line_cstr + str_offset));
 
             //Replacement ?
@@ -400,8 +404,6 @@ bool unitemp_sensors_load(void* context) {
             } else {
                 FURI_LOG_E(
                     APP_NAME, "Unsupported sensor name (%s) or sensor model (%s)", name, model);
-                furi_string_free(line);
-                file_stream_close(app->file_stream);
                 break;
             }
         }
