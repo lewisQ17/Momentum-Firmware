@@ -157,12 +157,14 @@ bool hex_viewer_startscreen_input(InputEvent* event, void* context) {
                 instance->view,
                 HexViewerStartscreenModel * model,
                 {
+                    bool read_ok = true;
                     if(app->model->file_offset > 0) {
                         app->model->file_offset -= HEX_VIEWER_BYTES_PER_LINE;
-                        if(!hex_viewer_read_file(app)) break; // TODO Do smth
+                        read_ok = hex_viewer_read_file(app);
                     }
 
-                    update_local_model_from_app(instance->context, model);
+                    // no break inside with_view_model: it would skip view_commit_model (locked model)
+                    if(read_ok) update_local_model_from_app(instance->context, model);
                 },
                 true);
             break;
@@ -173,12 +175,13 @@ bool hex_viewer_startscreen_input(InputEvent* event, void* context) {
                 {
                     uint32_t last_byte_on_screen =
                         app->model->file_offset + app->model->file_read_bytes;
+                    bool read_ok = true;
                     if(app->model->file_size > last_byte_on_screen) {
                         app->model->file_offset += HEX_VIEWER_BYTES_PER_LINE;
-                        if(!hex_viewer_read_file(app)) break; // TODO Do smth
+                        read_ok = hex_viewer_read_file(app);
                     }
 
-                    update_local_model_from_app(instance->context, model);
+                    if(read_ok) update_local_model_from_app(instance->context, model);
                 },
                 true);
             break;
