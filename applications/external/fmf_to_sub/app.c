@@ -350,6 +350,9 @@ static void fmf2sub_load_txt_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
             while(storage_file_read(file, &ch, 1) && !storage_file_eof(file)) {
                 furi_string_push_back(model->data.notes, ch);
             }
+        } else {
+            FURI_LOG_E(TAG, "Failed to open file: %s", furi_string_get_cstr(app->file_path));
+            error = true;
         }
     } while(false);
     storage_file_close(file);
@@ -390,9 +393,16 @@ static void fmf2sub_load_fmf_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
             break;
         }
 
-        flipper_format_read_uint32(ff, "BPM", &(model->data.bpm), 120);
-        flipper_format_read_uint32(ff, "Duration", &(model->data.duration), 4);
-        flipper_format_read_uint32(ff, "Octave", &(model->data.octave), 5);
+        // data_size is a value count, not a default: read 1 value and apply defaults on failure
+        if(!flipper_format_read_uint32(ff, "BPM", &(model->data.bpm), 1)) {
+            model->data.bpm = 120;
+        }
+        if(!flipper_format_read_uint32(ff, "Duration", &(model->data.duration), 1)) {
+            model->data.duration = 4;
+        }
+        if(!flipper_format_read_uint32(ff, "Octave", &(model->data.octave), 1)) {
+            model->data.octave = 5;
+        }
         model->data.notes = furi_string_alloc();
         if(!flipper_format_read_string(ff, "Notes", model->data.notes)) {
             FURI_LOG_E(TAG, "Failed to read notes.");
@@ -442,6 +452,10 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
 
         // process the notes
         FuriString* notes = model->data.notes;
+        // clamp untrusted values: avoid division by zero / inf / endless loops
+        if(model->data.bpm < 1 || model->data.bpm > 999) model->data.bpm = 120;
+        if(model->data.duration < 1 || model->data.duration > 64) model->data.duration = 4;
+        if(model->data.octave > 8) model->data.octave = 5;
         int16_t duration = -1;
         int16_t octave = -1;
         bool dot = false;
@@ -458,11 +472,16 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
                 if(duration == -1) {
                     duration = 0;
                 }
-                duration *= 10;
-                duration += ch - '0';
+                if(duration < 1000) {
+                    duration *= 10;
+                    duration += ch - '0';
+                }
                 ch = furi_string_get_char(notes, ++i);
             }
             if(duration == -1) {
+                duration = model->data.duration;
+            }
+            if(duration < 1 || duration > 64) {
                 duration = model->data.duration;
             }
 
@@ -513,12 +532,17 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
                 if(octave == -1) {
                     octave = 0;
                 }
-                octave *= 10;
-                octave += ch - '0';
+                if(octave < 100) {
+                    octave *= 10;
+                    octave += ch - '0';
+                }
                 ch = furi_string_get_char(notes, ++i);
             }
             if(octave == -1) {
                 octave = model->data.octave;
+            }
+            if(octave > 8) {
+                octave = 8;
             }
 
             if(ch == '.') {
@@ -534,6 +558,12 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
             }
 
             uint32_t pulse = (1000000 / frequency) / 2;
+            if(pulse == 0) {
+                octave = -1;
+                duration = -1;
+                dot = false;
+                continue;
+            }
             // 4/4 timing, duration of quarter note (4) is 500ms.
             float count = (1000000.0 / (pulse * 2.0)) * 2.0 / duration;
             count *= 120.0f;
@@ -545,6 +575,9 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
 
             if(count < 1.0f) {
                 count = 1.0;
+            }
+            if(count > 20000.0f) {
+                count = 20000.0f;
             }
 
             if(duration <= 1) {
@@ -562,7 +595,7 @@ void fmf2sub_save_sub_file(Fmf2SubApp* app, Fmf2SubConvertModel* model) {
                 (1000000.0 * 2.0 / duration * 120.0 / model->data.bpm) * (dot ? 1.5 : 1.0);
             float duration_rem = (duration_beat - duration_tone) / 2.0f;
             uint32_t rem_counter = 1;
-            while(duration_rem > 20000.0f) {
+            while(duration_rem > 20000.0f && rem_counter < 65536) {
                 rem_counter *= 2;
                 duration_rem /= 2.0;
             }
@@ -672,14 +705,18 @@ static bool fmf2sub_view_convert_custom_event_callback(uint32_t event, void* con
             app->view_convert,
             Fmf2SubConvertModel * model,
             {
-                model->state = Fmf2SubStateConverting;
-                FURI_LOG_D(TAG, "Loaded file: %s", furi_string_get_cstr(app->file_path));
-                FURI_LOG_D(TAG, "BPM: %ld", model->data.bpm);
-                FURI_LOG_D(TAG, "Duration: %ld", model->data.duration);
-                FURI_LOG_D(TAG, "Octave: %ld", model->data.octave);
-                FURI_LOG_D(TAG, "Notes: %s", furi_string_get_cstr(model->data.notes));
+                if(!model->data.notes) {
+                    model->state = Fmf2SubStateError;
+                } else {
+                    model->state = Fmf2SubStateConverting;
+                    FURI_LOG_D(TAG, "Loaded file: %s", furi_string_get_cstr(app->file_path));
+                    FURI_LOG_D(TAG, "BPM: %ld", model->data.bpm);
+                    FURI_LOG_D(TAG, "Duration: %ld", model->data.duration);
+                    FURI_LOG_D(TAG, "Octave: %ld", model->data.octave);
+                    FURI_LOG_D(TAG, "Notes: %s", furi_string_get_cstr(model->data.notes));
 
-                fmf2sub_save_sub_file(app, model);
+                    fmf2sub_save_sub_file(app, model);
+                }
             },
             true);
         return true;
