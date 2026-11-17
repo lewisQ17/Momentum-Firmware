@@ -187,8 +187,16 @@ static void sub_analyzer_analyze_file(SubAnalyzerApp* app, const char* path) {
                     p++;
                 }
                 
+                if(!(*p >= '0' && *p <= '9')) {
+                    // stray character: skip it, otherwise this loop never advances
+                    if(*p) p++;
+                    continue;
+                }
+                
                 while(*p >= '0' && *p <= '9') {
-                    value = value * 10 + (*p - '0');
+                    if(value < 100000000) { // guard int32 overflow
+                        value = value * 10 + (*p - '0');
+                    }
                     p++;
                 }
                 
@@ -294,9 +302,11 @@ static void sub_analyzer_analyze_file(SubAnalyzerApp* app, const char* path) {
                 size_t protocol_count = subghz_protocol_registry_count(app->protocol_registry);
                 
                 for(size_t i = 0; i < protocol_count; i++) {
-                    protocol = subghz_protocol_registry_get_by_index(app->protocol_registry, i);
-                    if(protocol && protocol->name && 
-                       strcmp(protocol->name, furi_string_get_cstr(protocol_name)) == 0) {
+                    const SubGhzProtocol* candidate =
+                        subghz_protocol_registry_get_by_index(app->protocol_registry, i);
+                    if(candidate && candidate->name && 
+                       strcmp(candidate->name, furi_string_get_cstr(protocol_name)) == 0) {
+                        protocol = candidate;
                         break;
                     }
                 }
