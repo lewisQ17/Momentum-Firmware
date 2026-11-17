@@ -216,12 +216,12 @@ static void key_copier_view_load_callback(void* context) {
     furi_string_set(app->file_path, browser_options.base_path);
     if(dialog_file_browser_show(app->dialogs, app->file_path, app->file_path, &browser_options)) {
         FlipperFormat* flipper_format = flipper_format_file_alloc(storage);
+        FuriString* format_buffer = furi_string_alloc();
+        FuriString* depth_buffer = furi_string_alloc();
         do {
             if(!flipper_format_file_open_existing(
                    flipper_format, furi_string_get_cstr(app->file_path)))
                 break;
-            FuriString* format_buffer = furi_string_alloc();
-            FuriString* depth_buffer = furi_string_alloc();
             if(!flipper_format_read_string(flipper_format, "Format Name", format_buffer)) break;
             if(!flipper_format_read_string(flipper_format, "Bitting Pattern", depth_buffer)) break;
             for(size_t i = 0; i < COUNT_OF(all_formats); i++) {
@@ -231,15 +231,28 @@ static void key_copier_view_load_callback(void* context) {
                 }
             }
 
+            // depth was sized for the previous format: resize it for the loaded one
+            if(model->depth != NULL) {
+                free(model->depth);
+            }
+            model->depth = malloc((model->format.pin_num + 1) * sizeof(uint8_t));
+            for(uint8_t i = 0; i <= model->format.pin_num; i++) {
+                model->depth[i] = model->format.min_depth_ind;
+            }
+
             for(int i = 0; i < model->format.pin_num; i++) {
+                // the pattern holds one digit and one separator per pin
+                if((size_t)(i * 2) >= furi_string_size(depth_buffer)) break;
                 model->depth[i] = (uint8_t)(furi_string_get_char(depth_buffer, i * 2) - '0');
             }
             model->data_loaded = true;
             // signal that the file was read successfully
         } while(0);
+        furi_string_free(format_buffer);
+        furi_string_free(depth_buffer);
         flipper_format_free(flipper_format);
-        furi_record_close(RECORD_STORAGE);
     }
+    furi_record_close(RECORD_STORAGE);
     view_dispatcher_switch_to_view(app->view_dispatcher, KeyCopierViewSubmenu);
 }
 
