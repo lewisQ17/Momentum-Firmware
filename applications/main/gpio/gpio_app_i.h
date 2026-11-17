@@ -35,6 +35,9 @@ struct GpioApp {
 
     VariableItemList* var_item_list;
     VariableItem* var_item_flow;
+    VariableItem* var_item_data_bits;
+    VariableItem* var_item_parity;
+    VariableItem* var_item_stop_bits;
     GpioTest* gpio_test;
     GpioInputMonitor* gpio_input_monitor;
     GpioUsbUart* gpio_usb_uart;

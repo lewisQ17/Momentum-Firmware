@@ -30,11 +30,9 @@ void gpio_scene_usb_uart_on_enter(void* context) {
     GpioApp* app = context;
     if(!scene_usb_uart) {
         scene_usb_uart = malloc(sizeof(SceneUsbUartBridge));
-        scene_usb_uart->cfg.vcp_ch = 0;
-        scene_usb_uart->cfg.uart_ch = 0;
-        scene_usb_uart->cfg.flow_pins = 0;
-        scene_usb_uart->cfg.baudrate_mode = 0;
-        scene_usb_uart->cfg.baudrate = 0;
+        // All-zero config = VCP 0, USART, no flow pins, host baudrate, no DE/RE,
+        // 8N1 framing from the menu and no RTS/DTR inversion
+        memset(scene_usb_uart, 0, sizeof(SceneUsbUartBridge));
         app->usb_uart_bridge = usb_uart_enable(&scene_usb_uart->cfg);
     }
 

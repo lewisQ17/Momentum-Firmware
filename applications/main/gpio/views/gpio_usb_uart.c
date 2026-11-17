@@ -12,6 +12,7 @@ struct GpioUsbUart {
 
 typedef struct {
     uint32_t baudrate;
+    char framing[6];
     uint32_t tx_cnt;
     uint32_t rx_cnt;
     uint8_t vcp_port;
@@ -41,10 +42,18 @@ static void gpio_usb_uart_draw_callback(Canvas* canvas, void* _model) {
     snprintf(temp_str, 18, "Pin %u", model->rx_pin);
     canvas_draw_str(canvas, 22, 42, temp_str);
 
-    if(model->baudrate == 0)
-        snprintf(temp_str, 18, "Baud: ????");
-    else
-        snprintf(temp_str, 18, "Baud: %lu", model->baudrate);
+    if(model->framing[0] == '\0') {
+        // Default 8N1: keep the classic layout
+        if(model->baudrate == 0)
+            snprintf(temp_str, 18, "Baud: ????");
+        else
+            snprintf(temp_str, 18, "Baud: %lu", model->baudrate);
+    } else {
+        if(model->baudrate == 0)
+            snprintf(temp_str, 18, "???? %s", model->framing);
+        else
+            snprintf(temp_str, 18, "%lu %s", model->baudrate, model->framing);
+    }
     canvas_draw_str(canvas, 45, 62, temp_str);
 
     if(model->tx_cnt < 100000000) {
@@ -140,6 +149,27 @@ void gpio_usb_uart_set_callback(GpioUsbUart* usb_uart, GpioUsbUartCallback callb
         false);
 }
 
+static void gpio_usb_uart_format_framing(const UsbUartState* st, char* out, size_t out_size) {
+    static const char data_chr[UsbUartDataBitsCount] = {'8', '7', '6'};
+    static const char parity_chr[UsbUartParityCount] = {'N', 'E', 'O'};
+    static const char* const stop_str[UsbUartStopBitsCount] = {"1", "2", "1.5", "0.5"};
+
+    if(st->data_bits_cur == UsbUartDataBits8 && st->parity_cur == UsbUartParityNone &&
+       st->stop_bits_cur == UsbUartStopBits1) {
+        // Default 8N1 is not shown, keeping the classic status layout
+        out[0] = '\0';
+        return;
+    }
+
+    snprintf(
+        out,
+        out_size,
+        "%c%c%s",
+        (st->data_bits_cur < UsbUartDataBitsCount) ? data_chr[st->data_bits_cur] : '?',
+        (st->parity_cur < UsbUartParityCount) ? parity_chr[st->parity_cur] : '?',
+        (st->stop_bits_cur < UsbUartStopBitsCount) ? stop_str[st->stop_bits_cur] : "?");
+}
+
 void gpio_usb_uart_update_state(GpioUsbUart* instance, UsbUartConfig* cfg, UsbUartState* st) {
     furi_assert(instance);
     furi_assert(cfg);
@@ -150,6 +180,7 @@ void gpio_usb_uart_update_state(GpioUsbUart* instance, UsbUartConfig* cfg, UsbUa
         GpioUsbUartModel * model,
         {
             model->baudrate = st->baudrate_cur;
+            gpio_usb_uart_format_framing(st, model->framing, sizeof(model->framing));
             model->vcp_port = cfg->vcp_ch;
             model->tx_pin = (cfg->uart_ch == 0) ? (13) : (15);
             model->rx_pin = (cfg->uart_ch == 0) ? (14) : (16);
