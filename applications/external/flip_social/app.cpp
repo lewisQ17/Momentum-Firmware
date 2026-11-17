@@ -211,7 +211,9 @@ FuriString *FlipSocialApp::httpRequest(
         return NULL;
     }
     flipperHttp->state = RECEIVING;
-    while (flipperHttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((flipperHttp->state == RECEIVING || flipperHttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }

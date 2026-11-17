@@ -132,7 +132,8 @@ FuriString *FlipDownloaderApp::httpRequest(
         return NULL;
     }
     flipperHttp->state = RECEIVING;
-    while (flipperHttp->state != IDLE)
+    // leave on ISSUE/INACTIVE too, otherwise a failed request hangs forever
+    while (flipperHttp->state == RECEIVING || flipperHttp->state == SENDING)
     {
         furi_delay_ms(100);
     }

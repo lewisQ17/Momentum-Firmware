@@ -1239,7 +1239,9 @@ void web_crawler_set_ssid_updated(void *context)
                 FURI_LOG_E(TAG, "Make sure the Flipper is connected to the Wifi Dev Board");
             }
             // wait until save is done
-            while (fhttp->state != IDLE)
+            // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+            uint32_t http_wait_start = furi_get_tick();
+            while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
             {
                 furi_delay_ms(100);
             }
@@ -1281,7 +1283,9 @@ void web_crawler_set_password_update(void *context)
                 FURI_LOG_E(TAG, "Make sure the Flipper is connected to the Wifi Dev Board");
             }
             // wait until save is done
-            while (fhttp->state != IDLE)
+            // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+            uint32_t http_wait_start = furi_get_tick();
+            while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
             {
                 furi_delay_ms(100);
             }

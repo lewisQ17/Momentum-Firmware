@@ -86,7 +86,7 @@ static bool update_load_char(
     }
 
     // Ensure null-termination
-    value[read_count - 1] = '\0';
+    value[read_count > 0 ? read_count - 1 : 0] = '\0';
 
     storage_file_close(file);
     storage_file_free(file);
