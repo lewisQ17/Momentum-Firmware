@@ -71,7 +71,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    ssid[ssid_length - 1] = '\0'; // Ensure null-termination
+    ssid[ssid_length > 0 ? ssid_length - 1 : 0] = '\0'; // Ensure null-termination
 
     // Load the password
     size_t password_length;
@@ -84,7 +84,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    password[password_length - 1] = '\0'; // Ensure null-termination
+    password[password_length > 0 ? password_length - 1 : 0] = '\0'; // Ensure null-termination
 
     storage_file_close(file);
     storage_file_free(file);

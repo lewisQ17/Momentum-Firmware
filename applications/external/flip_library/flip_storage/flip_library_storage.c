@@ -80,7 +80,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    ssid[ssid_length - 1] = '\0'; // Ensure null-termination
+    ssid[ssid_length > 0 ? ssid_length - 1 : 0] = '\0'; // Ensure null-termination
 
     // Load the password
     size_t password_length;
@@ -93,7 +93,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    password[password_length - 1] = '\0'; // Ensure null-termination
+    password[password_length > 0 ? password_length - 1 : 0] = '\0'; // Ensure null-termination
     
     // Load the temperature unit (optional — may not exist in older settings files)
     *use_fahrenheit = false;
