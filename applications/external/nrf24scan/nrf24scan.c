@@ -1345,7 +1345,8 @@ int32_t nrf24scan_app(void* p) {
         free(plugin_state);
         return 255;
     }
-    APP->log_arr = malloc(LOG_REC_SIZE * MAX_LOG_RECORDS);
+    // +8 slack: a SNIFF packet read at offset addr_len can run up to 3 bytes past a record
+    APP->log_arr = malloc(LOG_REC_SIZE * MAX_LOG_RECORDS + 8);
     if(APP->log_arr == NULL) {
         FURI_LOG_E(TAG, "Not enouch memory: %d", LOG_REC_SIZE * MAX_LOG_RECORDS);
         strcpy(addr_file_name, "MEMORY LOW!");
