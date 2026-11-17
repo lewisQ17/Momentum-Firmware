@@ -387,7 +387,8 @@ static usbd_respond
 #endif
             uint16_t* status = ftdi_get_modem_status_uint16_t(ftdi_usb->ftdi);
             memcpy(ftdi_usb->data_recvest, status, sizeof(uint16_t));
-            ftdi_usb->data_recvest_len = req->wLength;
+            // only 2 bytes are valid; never send more than the status we filled in
+            ftdi_usb->data_recvest_len = MIN(req->wLength, sizeof(uint16_t));
             ftdi_usb->dev->status.data_ptr = ftdi_usb->data_recvest;
             ftdi_usb->dev->status.data_count = ftdi_usb->data_recvest_len;
             return usbd_ack;
