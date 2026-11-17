@@ -24,5 +24,5 @@ bool flipbip_save_qrfile(
     const char* qr_msg_content,
     const char* file_name);
 
-bool flipbip_load_file_secure(char* settings);
+bool flipbip_load_file_secure(char* settings, size_t settings_size);
 bool flipbip_save_file_secure(const char* settings);

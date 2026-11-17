@@ -373,19 +373,29 @@ static int flipbip_scene_1_model_init(
         // Generate a random mnemonic using trezor-crypto
         const char* mnemonic_gen = mnemonic_generate(strength);
         // Check if the mnemonic is valid
-        if(mnemonic_check(mnemonic_gen) == 0)
+        if(mnemonic_check(mnemonic_gen) == 0) {
+            mnemonic_clear();
+            memzero(mnemonic, TEXT_BUFFER_SIZE);
+            free(mnemonic);
             return FlipBipStatusMnemonicCheckError; // 13 = mnemonic check error
+        }
         // Save the mnemonic to persistent storage
-        else if(!flipbip_save_file_secure(mnemonic_gen))
+        else if(!flipbip_save_file_secure(mnemonic_gen)) {
+            mnemonic_clear();
+            memzero(mnemonic, TEXT_BUFFER_SIZE);
+            free(mnemonic);
             return FlipBipStatusSaveError; // 12 = save error
+        }
         // Clear the generated mnemonic from memory
         mnemonic_clear();
     }
 
     // Load the mnemonic from persistent storage
-    if(!flipbip_load_file_secure(mnemonic)) {
+    if(!flipbip_load_file_secure(mnemonic, TEXT_BUFFER_SIZE)) {
         // Set mnemonic only mode for this error for memory cleanup purposes
         model->mnemonic_only = true;
+        memzero(mnemonic, TEXT_BUFFER_SIZE);
+        free(mnemonic);
         return FlipBipStatusLoadError; // 11 = load error
     }
     model->mnemonic = mnemonic;

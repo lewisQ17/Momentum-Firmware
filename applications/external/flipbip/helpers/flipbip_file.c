@@ -59,11 +59,12 @@ bool flipbip_load_file(
         size_t i = 0;
         while((storage_file_read(settings_file, &chr, 1) == 1) &&
               !storage_file_eof(settings_file) && !isspace(chr)) {
-            if(i < slen) {
+            if(i + 1 < slen) { // keep room for the terminator
                 settings[i] = chr;
             }
             i++;
         }
+        if(slen > 0) settings[i < slen ? i : slen - 1] = '\0';
         ret = true;
     } else {
         memzero(settings, strlen(settings));
@@ -191,7 +192,7 @@ bool flipbip_save_qrfile(
     return flipbip_save_file(qr_buf, FlipBipFileOther, file_name, false);
 }
 
-bool flipbip_load_file_secure(char* settings) {
+bool flipbip_load_file_secure(char* settings, size_t settings_size) {
     const size_t dlen = FILE_HLEN + FILE_SLEN + 1;
 
     // allocate memory for key/data
@@ -199,7 +200,11 @@ bool flipbip_load_file_secure(char* settings) {
     memzero(data, dlen);
 
     // load k2 from file
-    if(!flipbip_load_file(data, dlen, FlipBipFileKey, NULL)) return false;
+    if(!flipbip_load_file(data, dlen, FlipBipFileKey, NULL)) {
+        memzero(data, dlen);
+        free(data);
+        return false;
+    }
 
     // check header
     if(data[0] != FILE_HSTR[0] || data[1] != FILE_HSTR[1] || data[2] != FILE_HSTR[2] ||
@@ -225,7 +230,13 @@ bool flipbip_load_file_secure(char* settings) {
     data -= FILE_HLEN;
 
     // load data from file
-    if(!flipbip_load_file(data, dlen, FlipBipFileDat, NULL)) return false;
+    if(!flipbip_load_file(data, dlen, FlipBipFileDat, NULL)) {
+        memzero(data, dlen);
+        free(data);
+        memzero(k1, strlen(FILE_K1) / 2);
+        memzero(k2, FILE_KLEN / 2);
+        return false;
+    }
 
     // check header
     if(data[0] != FILE_HSTR[0] || data[1] != FILE_HSTR[1] || data[2] != FILE_HSTR[2] ||
@@ -244,7 +255,7 @@ bool flipbip_load_file_secure(char* settings) {
     flipbip_xtob(data, (unsigned char*)data, FILE_SLEN / 2);
 
     // copy to output
-    strcpy(settings, data);
+    strlcpy(settings, data, settings_size);
 
     // seek <-- header
     data -= FILE_HLEN;
