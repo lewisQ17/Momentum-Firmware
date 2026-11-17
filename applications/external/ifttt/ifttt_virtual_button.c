@@ -100,27 +100,16 @@ void send_serial_command_config(
     Settings* settings) {
     uint8_t data[1] = {0};
 
-    char config_tmp[100];
-    strcpy(config_tmp, "config,");
-    strcat(config_tmp, settings->save_key);
-    char config_tmp2[5];
-    strcpy(config_tmp2, config_tmp);
-    strcat(config_tmp2, ",");
-    char config_tmp3[100];
-    strcpy(config_tmp3, config_tmp2);
-    strcat(config_tmp3, settings->save_ssid);
-    char config_tmp4[5];
-    strcpy(config_tmp4, config_tmp3);
-    strcat(config_tmp4, ",");
-    char config_tmp5[100];
-    strcpy(config_tmp5, config_tmp4);
-    strcat(config_tmp5, settings->save_password);
-    char config_tmp6[5];
-    strcpy(config_tmp6, config_tmp5);
-    strcat(config_tmp6, ",");
+    // bounded build of "config,<key>,<ssid>,<password>,<event>"; long values get truncated
     char config[350];
-    strcpy(config, config_tmp6);
-    strcat(config, settings->save_event);
+    snprintf(
+        config,
+        sizeof(config),
+        "config,%s,%s,%s,%s",
+        settings->save_key,
+        settings->save_ssid,
+        settings->save_password,
+        settings->save_event);
 
     int length = strlen(config);
     for(int i = 0; i < length; i++) {
