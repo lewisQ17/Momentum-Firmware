@@ -45,7 +45,10 @@ static void mjs_load(struct mjs* mjs) {
     int custom_global = 0; /* whether the custom global object was provided */
 
     if(mjs_is_string(arg0)) {
-        const char* path = mjs_get_cstring(mjs, &arg0);
+        /* mjs_get_cstring() points into the owned_strings mbuf, which the
+         * mjs_mk_string() calls below (and executing the file) may realloc, so
+         * work on a private copy. */
+        char* path = strdup(mjs_get_cstring(mjs, &arg0));
         struct mjs_bcode_part* bp = NULL;
         mjs_err_t ret;
 
@@ -86,12 +89,6 @@ static void mjs_load(struct mjs* mjs) {
             }
         }
         if(ret != MJS_OK) {
-            /*
-       * arg0 and path might be invalidated by executing a file, so refresh
-       * them
-       */
-            arg0 = mjs_arg(mjs, 0);
-            path = mjs_get_cstring(mjs, &arg0);
             mjs_prepend_errorf(mjs, ret, "failed to exec file \"%s\"", path);
             goto clean;
         }
@@ -105,6 +102,7 @@ static void mjs_load(struct mjs* mjs) {
         mjs_set(mjs, global, "__dirname", ~0, saved_dirname);
         mjs_disown(mjs, &saved_dirname);
         mjs_disown(mjs, &saved_filename);
+        free(path);
     }
     mjs_return(mjs, res);
 }
