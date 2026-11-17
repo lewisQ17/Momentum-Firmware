@@ -402,6 +402,16 @@ static uint8_t avr_isp_prog_write_flash_pages(AvrIspProg* instance, size_t lengt
 
 static void avr_isp_prog_write_flash(AvrIspProg* instance, size_t length) {
     furi_assert(instance);
+    // length comes from the host: it must fit buff and be a whole number of words
+    if(length == 0 || length > sizeof(instance->buff) || (length & 1)) {
+        for(size_t x = 0; x < length; x++) {
+            avr_isp_prog_getch(instance); // drain the data, do not store it
+        }
+        avr_isp_prog_getch(instance); // EOP
+        instance->error++;
+        avr_isp_prog_tx_ch(instance, STK_NOSYNC);
+        return;
+    }
     avr_isp_prog_fill(instance, length);
     if(avr_isp_prog_getch(instance) == CRC_EOP) {
         avr_isp_prog_tx_ch(instance, STK_INSYNC);
