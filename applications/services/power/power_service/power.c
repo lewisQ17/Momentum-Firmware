@@ -407,7 +407,9 @@ static void power_check_auto_poweroff(Power* power) {
             return;
         }
         PowerOffResponse response = power_off_get_response(power->view_power_off);
-        if(response == PowerOffResponseDefault) {
+        // Right sets Hide on every variant, but this warning has no Hide button and
+        // the view swallows all input: keep counting down instead of freezing.
+        if(response == PowerOffResponseDefault || response == PowerOffResponseHide) {
             if(power->power_off_timeout) {
                 power_off_set_time_left(power->view_power_off, power->power_off_timeout--);
             } else {

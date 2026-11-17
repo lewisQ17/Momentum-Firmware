@@ -158,6 +158,9 @@ void power_settings_scene_start_on_enter(void* context) {
             app->settings.auto_poweroff_delay_ms,
             auto_poweroff_delay_value,
             AUTO_POWEROFF_DELAY_COUNT);
+        // Persist what the row shows: an unset (0) delay falls back to index 0 and
+        // would otherwise leave the feature silently inactive.
+        app->settings.auto_poweroff_delay_ms = auto_poweroff_delay_value[value_index];
         variable_item_set_current_value_index(item, value_index);
         variable_item_set_current_value_text(item, auto_poweroff_delay_text[value_index]);
     }
@@ -173,6 +176,7 @@ void power_settings_scene_start_on_enter(void* context) {
         uint8_t pct = app->settings.auto_poweroff_percent;
         if(pct < AUTO_POWEROFF_PERCENT_STEP) pct = AUTO_POWEROFF_PERCENT_STEP;
         if(pct > AUTO_POWEROFF_PERCENT_MAX) pct = AUTO_POWEROFF_PERCENT_MAX;
+        app->settings.auto_poweroff_percent = pct; // persist the displayed (clamped) value
         value_index = (pct / AUTO_POWEROFF_PERCENT_STEP) - 1;
         char buf[6];
         snprintf(buf, sizeof(buf), "%u%%", pct);
