@@ -128,7 +128,9 @@ static const struct {
 void momentum_settings_load(void) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* file = flipper_format_file_alloc(storage);
-    if(flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH)) {
+    // Fall back to the .bak left by an interrupted save (see momentum_settings_save).
+    if(flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH) ||
+       flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH ".bak")) {
         FuriString* val_str = furi_string_alloc();
         int32_t val_int;
         uint32_t val_uint;
@@ -174,9 +176,10 @@ void momentum_settings_save(void) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* file = flipper_format_file_alloc(storage);
 
-    // Write to a temp file, then atomically rename it over the live settings so a
-    // power loss (battery pull / USB yank) mid-write can't leave the real file
-    // truncated/corrupt — only the temp copy is ever written in place.
+    // Write to a temp file, then swap it in so a power loss (battery pull / USB
+    // yank) mid-write can't leave the real file truncated/corrupt — only the temp
+    // copy is ever written in place, and it replaces the live file only when every
+    // write succeeded.
     bool written = flipper_format_file_open_always(file, MOMENTUM_SETTINGS_PATH ".tmp");
     if(written) {
         int32_t tmp_int;
@@ -185,20 +188,20 @@ void momentum_settings_save(void) {
 #define entry momentum_settings_entries[entry_i]
             switch(entry.type) {
             case momentum_settings_type_str:
-                flipper_format_write_string_cstr(file, entry.key, (char*)entry.val);
+                written &= flipper_format_write_string_cstr(file, entry.key, (char*)entry.val);
                 break;
             case momentum_settings_type_int:
                 tmp_int = 0;
                 memcpy(&tmp_int, entry.val, entry.i_sz);
-                flipper_format_write_int32(file, entry.key, &tmp_int, 1);
+                written &= flipper_format_write_int32(file, entry.key, &tmp_int, 1);
                 break;
             case momentum_settings_type_uint:
                 tmp_uint = 0;
                 memcpy(&tmp_uint, entry.val, entry.u_sz);
-                flipper_format_write_uint32(file, entry.key, &tmp_uint, 1);
+                written &= flipper_format_write_uint32(file, entry.key, &tmp_uint, 1);
                 break;
             case momentum_settings_type_bool:
-                flipper_format_write_bool(file, entry.key, (bool*)entry.val, 1);
+                written &= flipper_format_write_bool(file, entry.key, (bool*)entry.val, 1);
                 break;
             default:
                 continue;
@@ -209,10 +212,25 @@ void momentum_settings_save(void) {
     flipper_format_free(file);
 
     if(written) {
-        // Atomic replace: remove the old file then rename the fully-written temp
-        // over it (FatFs rename is atomic; the vulnerable long write is done).
-        storage_common_remove(storage, MOMENTUM_SETTINGS_PATH);
-        storage_common_rename(storage, MOMENTUM_SETTINGS_PATH ".tmp", MOMENTUM_SETTINGS_PATH);
+        // Never leave the live file removed: move the old one aside as .bak, rename
+        // the fully-written temp in, then drop .bak. If the swap fails, put the old
+        // file back. Load falls back to .bak if power is lost between the renames.
+        bool had_old = storage_common_exists(storage, MOMENTUM_SETTINGS_PATH);
+        if(had_old) {
+            storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".bak");
+            storage_common_rename(
+                storage, MOMENTUM_SETTINGS_PATH, MOMENTUM_SETTINGS_PATH ".bak");
+        }
+        if(storage_common_rename(
+               storage, MOMENTUM_SETTINGS_PATH ".tmp", MOMENTUM_SETTINGS_PATH) == FSE_OK) {
+            storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".bak");
+        } else if(had_old) {
+            storage_common_rename(
+                storage, MOMENTUM_SETTINGS_PATH ".bak", MOMENTUM_SETTINGS_PATH);
+        }
+    } else {
+        // Failed or partial write: keep the existing settings untouched.
+        storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".tmp");
     }
 
     furi_record_close(RECORD_STORAGE);

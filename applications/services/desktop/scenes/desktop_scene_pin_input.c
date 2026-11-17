@@ -58,6 +58,8 @@ static void desktop_scene_pin_input_duress_wipe(void) {
     }
     storage_common_remove(storage, BT_KEYS_STORAGE_PATH);
     storage_common_remove(storage, MOMENTUM_SETTINGS_PATH);
+    storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".bak");
+    storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".tmp");
     storage_common_remove(storage, DESKTOP_SETTINGS_PATH);
     storage_common_remove(storage, DESKTOP_KEYBINDS_PATH);
     furi_record_close(RECORD_STORAGE);
