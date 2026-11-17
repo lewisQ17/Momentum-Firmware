@@ -21,6 +21,14 @@ typedef struct {
     char* cart_ROMSize;
     char* cart_RAMSize;
     char* cart_gb_type;
+    // Heap copies backing the fields above (NULL while a field is a literal)
+    char* heap_title;
+    char* heap_serial;
+    char* heap_checksum;
+    char* heap_ROMSize;
+    char* heap_RAMSize;
+    char* heap_gb_type;
+    FuriString* dump_path;
     bool cart_gb_sgb;
     char* cart_logo;
     // int ramBanks;
@@ -28,6 +36,32 @@ typedef struct {
     // uint8_t cart_logo[48*8];
 
 } GameBoyCartridgeModel;
+
+// Replace a model string and free the heap copy it previously held
+static void cart_model_set_str(char** field, char** heap_copy, const char* value, char* fallback) {
+    free(*heap_copy);
+    *heap_copy = value ? strdup(value) : NULL;
+    *field = *heap_copy ? *heap_copy : fallback;
+}
+
+static void cart_model_free_strings(GameBoyCartridgeModel* model) {
+    free(model->heap_title);
+    free(model->heap_serial);
+    free(model->heap_checksum);
+    free(model->heap_ROMSize);
+    free(model->heap_RAMSize);
+    free(model->heap_gb_type);
+    model->heap_title = NULL;
+    model->heap_serial = NULL;
+    model->heap_checksum = NULL;
+    model->heap_ROMSize = NULL;
+    model->heap_RAMSize = NULL;
+    model->heap_gb_type = NULL;
+    if(model->dump_path) {
+        furi_string_free(model->dump_path);
+        model->dump_path = NULL;
+    }
+}
 
 void gameboy_information_handle_rx_data_cb(uint8_t* buf, size_t len, void* context) {
     furi_assert(context);
@@ -55,52 +89,58 @@ void gameboy_information_handle_rx_data_cb(uint8_t* buf, size_t len, void* conte
                 // }
                 //  Title
                 cJSON* title = cJSON_GetObjectItemCaseSensitive(json, "rom_title");
-                if(cJSON_IsString(title) && (title->valuestring != NULL)) {
-                    model->cart_title = strdup(title->valuestring);
-
-                } else {
-                    model->cart_title = "None";
-                }
+                cart_model_set_str(
+                    &model->cart_title,
+                    &model->heap_title,
+                    cJSON_IsString(title) ? title->valuestring : NULL,
+                    "None");
                 //  Serial
                 cJSON* serial = cJSON_GetObjectItemCaseSensitive(json, "serial");
-                if(cJSON_IsString(serial) && (serial->valuestring != NULL)) {
-                    model->cart_serial = strdup(serial->valuestring);
-                } else {
-                    model->cart_serial = "";
-                }
+                cart_model_set_str(
+                    &model->cart_serial,
+                    &model->heap_serial,
+                    cJSON_IsString(serial) ? serial->valuestring : NULL,
+                    "");
                 //  Checksum
                 cJSON* checksum = cJSON_GetObjectItemCaseSensitive(json, "checksum");
-                if(cJSON_IsString(checksum) && (checksum->valuestring != NULL)) {
-                    model->cart_checksum = strdup(checksum->valuestring);
-                } else {
-                    model->cart_checksum = "None";
-                }
+                cart_model_set_str(
+                    &model->cart_checksum,
+                    &model->heap_checksum,
+                    cJSON_IsString(checksum) ? checksum->valuestring : NULL,
+                    "None");
                 //  ROMSize
 
                 cJSON* ROMSize = cJSON_GetObjectItemCaseSensitive(json, "ROMSize");
                 if(cJSON_IsNumber(ROMSize)) {
                     char buffer[20]; // Tamaño suficiente para almacenar un entero
                     snprintf(buffer, sizeof(buffer), "%d", ROMSize->valueint);
-                    model->cart_ROMSize = strdup(buffer); // Asigna una copia dinámica de la cadena
+                    cart_model_set_str(
+                        &model->cart_ROMSize,
+                        &model->heap_ROMSize,
+                        buffer,
+                        NULL); // Asigna una copia dinámica de la cadena
                 } else {
-                    model->cart_ROMSize =
-                        NULL; // Puedes asignar NULL o cualquier otro valor predeterminado
+                    cart_model_set_str(
+                        &model->cart_ROMSize,
+                        &model->heap_ROMSize,
+                        NULL,
+                        NULL); // Puedes asignar NULL o cualquier otro valor predeterminado
                 }
 
                 //  RAMSize
                 cJSON* RAMSize = cJSON_GetObjectItemCaseSensitive(json, "RAMSize");
-                if(cJSON_IsString(RAMSize) && (RAMSize->valuestring != NULL)) {
-                    model->cart_RAMSize = strdup(RAMSize->valuestring);
-                } else {
-                    model->cart_RAMSize = "None";
-                }
+                cart_model_set_str(
+                    &model->cart_RAMSize,
+                    &model->heap_RAMSize,
+                    cJSON_IsString(RAMSize) ? RAMSize->valuestring : NULL,
+                    "None");
                 //  GB Type
                 cJSON* gb_type = cJSON_GetObjectItemCaseSensitive(json, "gb_type");
-                if(cJSON_IsString(gb_type) && (gb_type->valuestring != NULL)) {
-                    model->cart_gb_type = strdup(gb_type->valuestring);
-                } else {
-                    model->cart_gb_type = "dump";
-                }
+                cart_model_set_str(
+                    &model->cart_gb_type,
+                    &model->heap_gb_type,
+                    cJSON_IsString(gb_type) ? gb_type->valuestring : NULL,
+                    "dump");
 
                 cJSON* logo_correct = cJSON_GetObjectItemCaseSensitive(json, "logo_correct");
                 if(cJSON_IsBool(logo_correct)) {
@@ -109,7 +149,12 @@ void gameboy_information_handle_rx_data_cb(uint8_t* buf, size_t len, void* conte
                     model->cart_logo = "NO";
                 }
 
-                FuriString* path = furi_string_alloc();
+                if(model->dump_path) {
+                    furi_string_reset(model->dump_path);
+                } else {
+                    model->dump_path = furi_string_alloc();
+                }
+                FuriString* path = model->dump_path;
                 //  int buffer_size = strlen(model->cart_title) + strlen(model->cart_serial) + strlen(model->cart_gb_type) + 3; // 3 para los guiones bajos y el punto
                 // char filename[255];
                 if(strcmp(model->cart_serial, "") == 0) {
@@ -304,7 +349,8 @@ GBACartridgeScene1* gba_cartridge_scene_1_alloc() {
 void gba_cartridge_scene_1_free(GBACartridgeScene1* instance) {
     furi_assert(instance);
 
-    with_view_model(instance->view, GameBoyCartridgeModel * model, { UNUSED(model); }, true);
+    with_view_model(
+        instance->view, GameBoyCartridgeModel * model, { cart_model_free_strings(model); }, true);
     view_free(instance->view);
     free(instance);
 }
