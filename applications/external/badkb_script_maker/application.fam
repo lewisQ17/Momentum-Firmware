@@ -1,0 +1,13 @@
+App(
+    appid="badkb_script_maker",
+    name="BadKB Script Maker",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="badkb_script_maker_app",
+    requires=["gui", "storage", "dialogs"],
+    stack_size=3 * 1024,
+    fap_libs=["assets"],
+    fap_icon="icon.png",
+    fap_category="Tools",
+    fap_version="1.0",
+    fap_description="Compose and edit Bad KB DuckyScript files on the Flipper, no computer needed",
+)
