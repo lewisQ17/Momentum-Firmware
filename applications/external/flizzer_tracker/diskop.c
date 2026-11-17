@@ -231,8 +231,9 @@ void load_config(FlizzerTrackerApp* tracker) {
 
     stream_read_line(tracker->stream, config_line);
 
+    // bounded to the sizes of param[80], eq[2], value[10]
     sscanf(
-        furi_string_get_cstr(config_line), "%s%s%s", tracker->param, tracker->eq, tracker->value);
+        furi_string_get_cstr(config_line), "%79s%1s%9s", tracker->param, tracker->eq, tracker->value);
 
     if(strcmp(tracker->param, "external_audio") == 0) {
         if(strcmp(tracker->value, "false") == 0) {

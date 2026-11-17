@@ -30,7 +30,15 @@ void load_instrument_inner(Stream* stream, Instrument* inst, uint8_t version) {
     rwops = stream_read(stream, (uint8_t*)&progsteps, sizeof(progsteps));
 
     if(progsteps > 0) {
-        rwops = stream_read(stream, (uint8_t*)inst->program, progsteps * sizeof(inst->program[0]));
+        // the program array holds INST_PROG_LEN steps: read what fits, skip the surplus from the file
+        uint8_t steps_fit = progsteps > INST_PROG_LEN ? INST_PROG_LEN : progsteps;
+        rwops = stream_read(stream, (uint8_t*)inst->program, steps_fit * sizeof(inst->program[0]));
+        if(progsteps > steps_fit) {
+            stream_seek(
+                stream,
+                (progsteps - steps_fit) * sizeof(inst->program[0]),
+                StreamOffsetFromCurrent);
+        }
     }
 
     rwops = stream_read(stream, (uint8_t*)&inst->program_period, sizeof(inst->program_period));
@@ -75,11 +83,21 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
     rwops = stream_read(stream, (uint8_t*)&song->loop_end, sizeof(song->loop_end));
     rwops = stream_read(stream, (uint8_t*)&song->pattern_length, sizeof(song->pattern_length));
 
+    if(song->pattern_length == 0 || song->pattern_length > MAX_PATTERN_LENGTH) {
+        song->pattern_length = 0;
+        return false;
+    }
+
     rwops = stream_read(stream, (uint8_t*)&song->speed, sizeof(song->speed));
     rwops = stream_read(stream, (uint8_t*)&song->rate, sizeof(song->rate));
 
     rwops =
         stream_read(stream, (uint8_t*)&song->num_sequence_steps, sizeof(song->num_sequence_steps));
+
+    if(song->num_sequence_steps > MAX_SEQUENCE_LENGTH) {
+        song->num_sequence_steps = 0;
+        return false;
+    }
 
     for(uint16_t i = 0; i < song->num_sequence_steps; i++) {
         rwops = stream_read(
@@ -101,6 +119,20 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
     }
 
     rwops = stream_read(stream, (uint8_t*)&song->num_instruments, sizeof(song->num_instruments));
+
+    if(song->num_instruments > MAX_INSTRUMENTS) {
+        song->num_instruments = 0;
+        return false;
+    }
+
+    // sequence steps may only point at patterns that were really loaded
+    for(uint16_t i = 0; i < song->num_sequence_steps; i++) {
+        for(uint8_t ch = 0; ch < SONG_MAX_CHANNELS; ch++) {
+            if(song->sequence.sequence_step[i].pattern_indices[ch] >= song->num_patterns) {
+                song->sequence.sequence_step[i].pattern_indices[ch] = 0;
+            }
+        }
+    }
 
     for(uint16_t i = 0; i < song->num_instruments; i++) {
         song->instrument[i] = (Instrument*)malloc(sizeof(Instrument));
