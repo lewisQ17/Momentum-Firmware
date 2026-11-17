@@ -51,6 +51,9 @@ static IconSpec world_get_icon_spec(const char *name)
     return (IconSpec){.id = -1, .icon = NULL, .size = (Vector){0, 0}};
 }
 
+#define WORLD_MAX_ICONS_PER_ENTRY 256
+#define WORLD_MAX_ICONS_TOTAL     2048
+
 bool world_json_draw(GameManager *manager, Level *level, const FuriString *json_data)
 {
     if (!json_data)
@@ -72,17 +75,21 @@ bool world_json_draw(GameManager *manager, Level *level, const FuriString *json_
             int count = atoi(furi_string_get_cstr(amount));
             if (count < 1)
                 count = 1;
+            if (count > WORLD_MAX_ICONS_PER_ENTRY)
+                count = WORLD_MAX_ICONS_PER_ENTRY;
             total_icons += count;
             furi_string_free(amount);
         }
         furi_string_free(data);
     }
+    if (total_icons > WORLD_MAX_ICONS_TOTAL)
+        total_icons = WORLD_MAX_ICONS_TOTAL;
     FURI_LOG_I("Game", "Total icons to spawn: %d", total_icons);
 
     // Allocate the icon group context (local instance)
     IconGroupContext igctx;
     igctx.count = total_icons;
-    igctx.icons = malloc(total_icons * sizeof(IconSpec));
+    igctx.icons = calloc(total_icons > 0 ? total_icons : 1, sizeof(IconSpec));
     if (!igctx.icons)
     {
         FURI_LOG_E("Game", "Failed to allocate icon group array for %d icons", total_icons);
@@ -133,6 +140,8 @@ bool world_json_draw(GameManager *manager, Level *level, const FuriString *json_
         int count = atoi(furi_string_get_cstr(amount_str));
         if (count < 1)
             count = 1;
+        if (count > WORLD_MAX_ICONS_PER_ENTRY)
+            count = WORLD_MAX_ICONS_PER_ENTRY;
         float base_x = atof_furi(x_str);
         float base_y = atof_furi(y_str);
         bool is_horizontal = (furi_string_cmp(horizontal_str, "true") == 0);
@@ -156,6 +165,8 @@ bool world_json_draw(GameManager *manager, Level *level, const FuriString *json_
                 spec.pos.x = base_x;
                 spec.pos.y = base_y + (j * spacing);
             }
+            if (spec_index >= total_icons)
+                break;
             igctx.icons[spec_index++] = spec;
         }
 
@@ -166,6 +177,10 @@ bool world_json_draw(GameManager *manager, Level *level, const FuriString *json_
         furi_string_free(horizontal_str);
         furi_string_free(data);
     }
+
+    // Only the entries that were really filled count (unknown/incomplete ones are skipped)
+    igctx.count = spec_index;
+    game_context->icon_count = spec_index;
 
     // Spawn one icon group entity.
     Entity *groupEntity = level_add_entity(level, &icon_desc);
@@ -255,7 +270,9 @@ FuriString *world_fetch(FlipperHTTP *fhttp, const char *name)
         return NULL;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }

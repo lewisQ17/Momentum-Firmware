@@ -577,7 +577,9 @@ bool game_start_ws(FlipperHTTP *fhttp, char *lobby_name)
         return false;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }
@@ -676,7 +678,9 @@ static bool game_lobbies(FlipperHTTP *fhttp, uint8_t max_players, uint8_t max_lo
         return false;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         // Wait for the request to be received
         furi_delay_ms(100);
@@ -815,7 +819,9 @@ bool game_fetch_lobby(FlipperHTTP *fhttp, const char *lobby_name)
         return false;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }
@@ -852,7 +858,9 @@ bool game_join_lobby(FlipperHTTP *fhttp, const char *lobby_name)
         return false;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }
@@ -1166,7 +1174,9 @@ bool game_remove_from_lobby(FlipperHTTP *fhttp)
         return false;
     }
     fhttp->state = RECEIVING;
-    while (fhttp->state != IDLE)
+    // leave on ISSUE/INACTIVE or after 2 minutes, otherwise a failed request hangs forever
+    uint32_t http_wait_start = furi_get_tick();
+    while ((fhttp->state == RECEIVING || fhttp->state == SENDING) && (furi_get_tick() - http_wait_start) < 120000)
     {
         furi_delay_ms(100);
     }

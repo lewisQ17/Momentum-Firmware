@@ -113,7 +113,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    wifi_ssid[wifi_ssid_length - 1] = '\0'; // Ensure null-termination
+    wifi_ssid[wifi_ssid_length > 0 ? wifi_ssid_length - 1 : 0] = '\0'; // Ensure null-termination
 
     // Load the wifi_password
     size_t wifi_password_length;
@@ -126,7 +126,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    wifi_password[wifi_password_length - 1] = '\0'; // Ensure null-termination
+    wifi_password[wifi_password_length > 0 ? wifi_password_length - 1 : 0] = '\0'; // Ensure null-termination
 
     // Load the username
     size_t username_length;
@@ -139,7 +139,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    username[username_length - 1] = '\0'; // Ensure null-termination
+    username[username_length > 0 ? username_length - 1 : 0] = '\0'; // Ensure null-termination
 
     // Load the password
     size_t password_length;
@@ -152,7 +152,7 @@ bool load_settings(
         furi_record_close(RECORD_STORAGE);
         return false;
     }
-    password[password_length - 1] = '\0'; // Ensure null-termination
+    password[password_length > 0 ? password_length - 1 : 0] = '\0'; // Ensure null-termination
 
     storage_file_close(file);
     storage_file_free(file);
@@ -245,7 +245,7 @@ bool load_char(
     }
 
     // Ensure null-termination
-    value[read_count - 1] = '\0';
+    value[read_count > 0 ? read_count - 1 : 0] = '\0';
 
     storage_file_close(file);
     storage_file_free(file);
@@ -541,7 +541,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        ssid[ssid_length - 1] = '\0'; // Ensure null-termination
+        ssid[ssid_length > 0 ? ssid_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the password
@@ -557,7 +557,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        password[password_length - 1] = '\0'; // Ensure null-termination
+        password[password_length > 0 ? password_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the login_username_logged_out
@@ -573,7 +573,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        login_username_logged_out[username_out_length - 1] = '\0'; // Ensure null-termination
+        login_username_logged_out[username_out_length > 0 ? username_out_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the login_username_logged_in
@@ -589,7 +589,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        login_username_logged_in[username_in_length - 1] = '\0'; // Ensure null-termination
+        login_username_logged_in[username_in_length > 0 ? username_in_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the login_password_logged_out
@@ -605,7 +605,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        login_password_logged_out[password_out_length - 1] = '\0'; // Ensure null-termination
+        login_password_logged_out[password_out_length > 0 ? password_out_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the change_password_logged_in
@@ -621,7 +621,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        change_password_logged_in[change_password_length - 1] = '\0'; // Ensure null-termination
+        change_password_logged_in[change_password_length > 0 ? change_password_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the is_logged_in
@@ -637,7 +637,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        is_logged_in[is_logged_in_length - 1] = '\0'; // Ensure null-termination
+        is_logged_in[is_logged_in_length > 0 ? is_logged_in_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     // Load the change_bio_logged_in
@@ -653,7 +653,7 @@ static bool load_flip_social_settings(
     }
     else
     {
-        change_bio_logged_in[change_bio_length - 1] = '\0'; // Ensure null-termination
+        change_bio_logged_in[change_bio_length > 0 ? change_bio_length - 1 : 0] = '\0'; // Ensure null-termination
     }
 
     storage_file_close(file);
