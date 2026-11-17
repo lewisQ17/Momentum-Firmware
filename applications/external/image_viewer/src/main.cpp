@@ -12,6 +12,7 @@ constexpr uint32_t msg_count = 8UL;
 constexpr uint32_t timeout = 100UL;
 
 Stream* stream;
+static bool image_opened = false; // false when the browser was cancelled
 
 uint8_t reverse_bits(uint8_t b) {
     b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
@@ -28,16 +29,19 @@ static void draw_callback(Canvas* canvas, void* ctx) {
 
     const size_t image_size = ((width * height) / 8) + 1;
 
-    uint8_t* image_data = new uint8_t[image_size];
+    canvas_clear(canvas);
+    if(!image_opened) return;
+
+    uint8_t* image_data = new uint8_t[image_size](); // zero-initialised
 
     stream_rewind(stream);
-    stream_read(stream, image_data, stream_size(stream));
+    // never read more than the buffer holds, whatever the file size is
+    stream_read(stream, image_data, MIN(stream_size(stream), image_size));
 
-    for(size_t i = 1; i <= image_size; ++i) {
+    for(size_t i = 1; i < image_size; ++i) {
         image_data[i] = reverse_bits(image_data[i]);
     }
 
-    canvas_clear(canvas);
     canvas_draw_bitmap(canvas, 0, 0, width, height, image_data);
 
     delete[] image_data;
@@ -77,8 +81,12 @@ int32_t image_viewer_main(void* p) {
     if(selected) {
         if(!file_stream_open(stream, furi_string_get_cstr(path), FSAM_READ, FSOM_OPEN_EXISTING)) {
             FURI_LOG_E(tag, "Cannot open file \"%s\"", furi_string_get_cstr(path));
+            furi_string_free(path);
+            furi_message_queue_free(event_queue);
+            stream_free(stream);
             return -1;
         }
+        image_opened = true;
     }
 
     furi_string_free(path);
