@@ -16,6 +16,7 @@
 #include <stdbool.h>
 
 #include <momentum/settings.h>
+#include <momentum/asset_packs_i.h>
 
 typedef struct {
     int32_t x;
@@ -537,6 +538,12 @@ void elements_bubble_str(
     size_t font_height = canvas_current_font_height(canvas);
     size_t str_width = canvas_string_width(canvas, text);
 
+    // Custom asset pack fonts sit too high in the bubble, push them down
+    int32_t y_offset = 0;
+    if(asset_packs && asset_packs->font_params[FontSecondary]) {
+        y_offset = canvas_get_font_params(canvas, FontSecondary)->height / 2;
+    }
+
     // count \n's
     size_t lines = 1;
     const char* t = text;
@@ -558,7 +565,7 @@ void elements_bubble_str(
     canvas_draw_box(canvas, frame_x + 1, frame_y + 1, frame_width - 2, frame_height - 2);
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_rframe(canvas, frame_x, frame_y, frame_width, frame_height, 1);
-    elements_multiline_text(canvas, x + 4, y - 1 + font_height, text);
+    elements_multiline_text(canvas, x + 4, y - 1 + font_height + y_offset, text);
 
     int32_t x1 = 0;
     int32_t x2 = 0;
