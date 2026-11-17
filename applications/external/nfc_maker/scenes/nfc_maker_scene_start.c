@@ -11,16 +11,18 @@ void nfc_maker_scene_start_on_enter(void* context) {
 
     submenu_set_header(submenu, "NFC Tag Maker v" FAP_VERSION);
 
+    // iOS ignores these NDEF record types (no background tag reading), Android reads them.
+    // Source: https://gist.github.com/equipter/de2d9e421be9af1615e9b9cad4834ddc
     submenu_add_item(
         submenu,
-        "Bluetooth MAC",
+        "Bluetooth (Android)",
         NfcMakerSceneBluetooth,
         nfc_maker_scene_start_submenu_callback,
         app);
 
     submenu_add_item(
         submenu,
-        "Contact Vcard",
+        "Contact (Android)",
         NfcMakerSceneContact,
         nfc_maker_scene_start_submenu_callback,
         app);
@@ -42,13 +44,21 @@ void nfc_maker_scene_start_on_enter(void* context) {
         submenu, "Phone Number", NfcMakerScenePhone, nfc_maker_scene_start_submenu_callback, app);
 
     submenu_add_item(
-        submenu, "Text Note", NfcMakerSceneText, nfc_maker_scene_start_submenu_callback, app);
+        submenu,
+        "Text Note (Android)",
+        NfcMakerSceneText,
+        nfc_maker_scene_start_submenu_callback,
+        app);
 
     submenu_add_item(
         submenu, "Plain URL", NfcMakerSceneUrl, nfc_maker_scene_start_submenu_callback, app);
 
     submenu_add_item(
-        submenu, "WiFi Login", NfcMakerSceneWifi, nfc_maker_scene_start_submenu_callback, app);
+        submenu,
+        "WiFi Login (Android)",
+        NfcMakerSceneWifi,
+        nfc_maker_scene_start_submenu_callback,
+        app);
 
     submenu_set_selected_item(
         submenu, scene_manager_get_scene_state(app->scene_manager, NfcMakerSceneStart));
