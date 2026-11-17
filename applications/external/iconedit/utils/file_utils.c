@@ -307,8 +307,8 @@ bool png_file_save(IEIcon* icon, bool current_frame_only) {
 void png_init_cb(pngle_t* pngle, uint32_t width, uint32_t height) {
     IEIcon* icon = pngle_get_user_data(pngle);
     assert(icon->frames == NULL);
-    assert(width > 0);
-    assert(height > 0);
+    // reject sizes that do not fit the editor (128x64): png_file_open() sees frames == NULL and fails
+    if(width == 0 || height == 0 || width > 128 || height > 64) return;
     ie_icon_reset(icon, width, height, NULL);
 }
 
@@ -317,6 +317,7 @@ void png_draw_cb(pngle_t* pngle, uint32_t x, uint32_t y, uint32_t w, uint32_t h,
     UNUSED(w);
     UNUSED(h);
     IEIcon* icon = pngle_get_user_data(pngle);
+    if(icon->frames == NULL) return; // image was rejected in the init callback
     // FURI_LOG_W(
     //     "png",
     //     "on_draw: w,h = %ld x %ld, x,y = %ld, %ld = %d %d %d",
@@ -357,10 +358,13 @@ IEIcon* png_file_open(const char* icon_path) {
         char buffer[64] = {0};
         size_t remain = 0;
         size_t len;
+        bool png_failed = false;
         while((len = storage_file_read(png_file, buffer + remain, sizeof(buffer) - remain)) > 0) {
             int fed = pngle_feed(png, buffer, remain + len);
             if(fed < 0) {
                 FURI_LOG_E("PNG", "pngle error: %s", pngle_error(png));
+                png_failed = true;
+                break;
             }
             remain = remain + len - fed;
             if(remain > 0) {
@@ -369,6 +373,7 @@ IEIcon* png_file_open(const char* icon_path) {
         }
 
         pngle_destroy(png);
+        if(png_failed || icon->frames == NULL) break;
         success = true;
     } while(false);
 
@@ -487,6 +492,10 @@ IEIcon* bmx_file_open(const char* icon_path) {
             FURI_LOG_E("BMX", "File size is zero!");
             break;
         }
+        if(bmx_file_size <= 2 * sizeof(int32_t)) {
+            FURI_LOG_E("BMX", "File too small!");
+            break;
+        }
         int32_t w, h;
         if(storage_file_read(bmx_file, &w, sizeof(w)) != sizeof(w)) {
             FURI_LOG_E("BMX", "BMX image width can't be read");
@@ -494,6 +503,10 @@ IEIcon* bmx_file_open(const char* icon_path) {
         }
         if(storage_file_read(bmx_file, &h, sizeof(h)) != sizeof(h)) {
             FURI_LOG_E("BMX", "BMX image height can't be read");
+            break;
+        }
+        if(w <= 0 || w > 128 || h <= 0 || h > 64) {
+            FURI_LOG_E("BMX", "BMX image size out of range: %ld x %ld", w, h);
             break;
         }
         uint8_t* encoded_data = malloc(bmx_file_size - 2 * sizeof(int32_t));
@@ -521,6 +534,12 @@ IEIcon* bmx_file_open(const char* icon_path) {
         compress_free(compress);
         if(!decode_success) {
             FURI_LOG_E("BMX", "Failed to decode BMX data");
+            free(decoded_data);
+            break;
+        }
+
+        if(decoded_data_size < (size_t)((w + 7) / 8) * (size_t)h) {
+            FURI_LOG_E("BMX", "Decoded BMX data too short for %ld x %ld", w, h);
             free(decoded_data);
             break;
         }
