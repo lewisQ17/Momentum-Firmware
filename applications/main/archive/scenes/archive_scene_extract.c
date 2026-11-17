@@ -29,6 +29,22 @@ static void archive_extract_dest_from_path(const char* archive_path, FuriString*
     }
 }
 
+// Skip entries with a ".." path component (zip-slip): tar_archive joins entry
+// names onto the destination without normalising them, so they could write
+// outside it.
+static bool archive_extract_entry_filter(const char* name, bool is_directory, void* context) {
+    UNUSED(is_directory);
+    UNUSED(context);
+    const char* p = name;
+    while(*p) {
+        while(*p == '/' || *p == '\\') p++;
+        const char* start = p;
+        while(*p && *p != '/' && *p != '\\') p++;
+        if((p - start) == 2 && start[0] == '.' && start[1] == '.') return false;
+    }
+    return true;
+}
+
 // Blocking unpack (mirrors how the OTA updater / storage_cli extract). Runs while
 // the loading popup is shown on the stack view, which is drawn by the GUI service
 // thread independently of this (blocking) app thread.
@@ -38,6 +54,7 @@ static bool archive_extract_perform(const char* archive_path, const char* dest_d
     TarArchive* tar = tar_archive_alloc(storage);
     bool ok = false;
     if(tar_archive_open(tar, archive_path, tar_archive_get_mode_for_path(archive_path))) {
+        tar_archive_set_file_callback(tar, archive_extract_entry_filter, NULL);
         ok = tar_archive_unpack_to(tar, dest_dir, NULL);
     }
     tar_archive_free(tar);
