@@ -99,6 +99,11 @@ typedef struct {
 
 ARRAY_DEF(SubGhzSettingCustomPresetItemArray, SubGhzSettingCustomPresetItem, M_POD_OPLIST) //-V658
 
+// 00 00 register terminator + 8 byte PA table
+#define SUBGHZ_SETTING_PRESET_DATA_MIN_SIZE (2 + 8)
+// Far above what the 47 CC1101 config registers can need
+#define SUBGHZ_SETTING_PRESET_DATA_MAX_SIZE (1024)
+
 #define M_OPL_SubGhzSettingCustomPresetItemArray_t() \
     ARRAY_OPLIST(SubGhzSettingCustomPresetItemArray, M_POD_OPLIST)
 
@@ -372,10 +377,14 @@ bool subghz_setting_load_custom_preset(
         SubGhzSettingCustomPresetItemArray_push_raw(instance->preset->data);
     item->custom_preset_name = furi_string_alloc();
     furi_string_set(item->custom_preset_name, preset_name);
+    item->custom_preset_data = NULL;
+    item->custom_preset_data_size = 0;
     do {
         if(!flipper_format_get_value_count(fff_data_file, "Custom_preset_data", &temp_data32))
             break;
-        if(!temp_data32 || (temp_data32 % 2)) {
+        // Layout: register/value pairs, a 00 00 terminator, then the 8 byte PA table
+        if(temp_data32 < SUBGHZ_SETTING_PRESET_DATA_MIN_SIZE ||
+           temp_data32 > SUBGHZ_SETTING_PRESET_DATA_MAX_SIZE || (temp_data32 % 2)) {
             FURI_LOG_E(TAG, "Integrity error Custom_preset_data");
             break;
         }
@@ -389,8 +398,23 @@ bool subghz_setting_load_custom_preset(
             FURI_LOG_E(TAG, "Missing Custom_preset_data");
             break;
         }
+        // The radio drivers scan for the terminator without a bound and then copy
+        // the PA table that follows it, so both must be inside the data
+        size_t terminator = 0;
+        while(terminator < item->custom_preset_data_size && item->custom_preset_data[terminator]) {
+            terminator += 2;
+        }
+        if(terminator + SUBGHZ_SETTING_PRESET_DATA_MIN_SIZE > item->custom_preset_data_size) {
+            FURI_LOG_E(TAG, "Integrity error Custom_preset_data");
+            break;
+        }
         return true;
     } while(true);
+
+    // Do not leave a half-loaded preset in the list
+    furi_string_free(item->custom_preset_name);
+    free(item->custom_preset_data);
+    SubGhzSettingCustomPresetItemArray_pop_back(NULL, instance->preset->data);
     return false;
 }
 

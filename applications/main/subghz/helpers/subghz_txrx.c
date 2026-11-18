@@ -150,6 +150,9 @@ uint8_t*
         0x12, //-30dBm
     };
 
+    //No PA table to edit in missing or too short preset data.
+    if(!preset_data || preset_data_size < PRESET_POWER_OFFSET_FM) return preset_data;
+
     //Grab the AM and FM byte now, so we can do proper checks.
     uint8_t fm_byte = preset_data[preset_data_size - PRESET_POWER_OFFSET_FM];
     uint8_t am_byte = preset_data[preset_data_size - PRESET_POWER_OFFSET_AM];
@@ -342,8 +345,7 @@ SubGhzTxRxStartTxState subghz_txrx_tx_start(SubGhzTxRx* instance, FlipperFormat*
             need_block = SUBGHZ_TX_MIN_BLOCK_RAW;
         }
         instance->tx_min_heap_required = need_heap;
-        if(memmgr_get_free_heap() < need_heap ||
-           memmgr_heap_get_max_free_block() < need_block) {
+        if(memmgr_get_free_heap() < need_heap || memmgr_heap_get_max_free_block() < need_block) {
             FURI_LOG_E(TAG, "Not enough memory to start TX");
             ret = SubGhzTxRxStartTxStateErrorMemory;
             break;

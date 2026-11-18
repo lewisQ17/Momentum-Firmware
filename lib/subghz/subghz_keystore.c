@@ -116,8 +116,10 @@ static bool subghz_keystore_read_file(SubGhzKeystore* instance, Stream* stream, 
     bool result = true;
     uint8_t buffer[FILE_BUFFER_SIZE];
 
-    char* decrypted_line = malloc(SUBGHZ_KEYSTORE_FILE_DECRYPTED_LINE_SIZE);
-    char* encrypted_line = malloc(SUBGHZ_KEYSTORE_FILE_ENCRYPTED_LINE_SIZE);
+    // One spare byte each that is never written, so that a line (or decrypted
+    // block) filling the whole buffer is still NUL-terminated for strlen/sscanf
+    char* decrypted_line = malloc(SUBGHZ_KEYSTORE_FILE_DECRYPTED_LINE_SIZE + 1);
+    char* encrypted_line = malloc(SUBGHZ_KEYSTORE_FILE_ENCRYPTED_LINE_SIZE + 1);
     size_t encrypted_line_cursor = 0;
 
     do {
