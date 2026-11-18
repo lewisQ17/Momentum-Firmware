@@ -94,12 +94,14 @@ void calculate_values(void* context) {
 	decimal_substitute(app->I);
 
 	/* Convert the VRI strings to doubles so we can math them */	
-	char *ptr1, *ptr2, *ptr3;
+	char *ptr1, *ptr2, *ptr3; // strtod end pointers: they point into the strings, never free them
 	double V, R, I;
 	V = strtod(app->V, &ptr1);
 	R = strtod(app->R, &ptr2);
 	I = strtod(app->I, &ptr3);
-	free(ptr1); free(ptr2); free(ptr3); // TODO I don't think this is strictly necessary
+	UNUSED(ptr1);
+	UNUSED(ptr2);
+	UNUSED(ptr3);
 
 	if (V == 0) {
 		if (R != 0 && I != 0) {
@@ -120,13 +122,9 @@ void calculate_values(void* context) {
 	}
 
 	// Convert the double values to a string.
-	size_t s;
-	s = snprintf(NULL, 0, "%lf", V);
-	snprintf(app->V, s, "%lf", V);
-	s = snprintf(NULL, 0, "%lf", R);
-	snprintf(app->R, s, "%lf", R);
-	s = snprintf(NULL, 0, "%lf", I);
-	snprintf(app->I, s, "%lf", I);
+	snprintf(app->V, sizeof(app->V), "%.3f", V);
+	snprintf(app->R, sizeof(app->R), "%.3f", R);
+	snprintf(app->I, sizeof(app->I), "%.3f", I);
 
 	FURI_LOG_D(TAG, "Voltage double to string: %s", app->V);
 	FURI_LOG_D(TAG, "Resistance double to string: %s", app->R);
