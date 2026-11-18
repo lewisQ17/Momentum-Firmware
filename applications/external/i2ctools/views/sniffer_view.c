@@ -58,6 +58,9 @@ void draw_sniffer_view(Canvas* canvas, i2cSniffer* i2c_sniffer) {
     uint8_t row = 1;
     uint8_t column = 1;
     uint8_t frame_size = i2c_sniffer->frames[i2c_sniffer->menu_index].data_index;
+    if(frame_size > MAX_MESSAGE_SIZE) {
+        frame_size = MAX_MESSAGE_SIZE;
+    }
     uint8_t offset = i2c_sniffer->row_index;
     if(i2c_sniffer->row_index > 0) {
         offset += 1;

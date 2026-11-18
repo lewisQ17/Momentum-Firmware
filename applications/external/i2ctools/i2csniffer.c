@@ -72,6 +72,10 @@ void SCLcallback(void* _i2c_sniffer) {
     uint8_t frame = i2c_sniffer->frame_index;
     uint8_t bit = i2c_sniffer->frames[frame].bit_index;
     uint8_t data_idx = i2c_sniffer->frames[frame].data_index;
+    // a transaction longer than the frame buffer is not recorded past its end
+    if(data_idx >= MAX_MESSAGE_SIZE) {
+        return;
+    }
     if(bit < 8) {
         i2c_sniffer->frames[frame].data[data_idx] <<= 1;
         i2c_sniffer->frames[frame].data[data_idx] |= (int)furi_hal_gpio_read(pinSDA);
