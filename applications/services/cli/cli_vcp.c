@@ -50,6 +50,8 @@ struct CliVcp {
     PipeSide* shell_pipe;
     volatile bool is_currently_transmitting;
     size_t previous_tx_length;
+    volatile bool rx_event_pending; // <! an Rx event is already queued
+    volatile bool events_lost; // <! the internal queue overflowed, state needs a resync
 
     CliRegistry* main_registry;
     CliShell* shell;
@@ -99,7 +101,14 @@ static void cli_vcp_maybe_receive_data(CliVcp* cli_vcp) {
 // =============
 
 static void cli_vcp_signal_internal_event(CliVcp* cli_vcp, CliVcpInternalEvent event) {
-    furi_check(furi_message_queue_put(cli_vcp->internal_evt_queue, &event, 0) == FuriStatusOk);
+    // The service thread can be busy for a long time: on disconnect it joins the
+    // shell thread, and a shell command may run for minutes. USB callbacks keep
+    // arriving meanwhile, so the queue can fill up. Never crash on that; note the
+    // loss and let the service thread resynchronise with the real state later.
+    if(furi_message_queue_put(cli_vcp->internal_evt_queue, &event, 0) != FuriStatusOk) {
+        if(event == CliVcpInternalEventRx) cli_vcp->rx_event_pending = false;
+        cli_vcp->events_lost = true;
+    }
 }
 
 static void cli_vcp_cdc_tx_done(void* context) {
@@ -110,6 +119,10 @@ static void cli_vcp_cdc_tx_done(void* context) {
 
 static void cli_vcp_cdc_rx(void* context) {
     CliVcp* cli_vcp = context;
+    // One queued Rx event is enough: the handler reads whatever is pending. This
+    // keeps an unread packet from flooding the queue while the thread is busy.
+    if(cli_vcp->rx_event_pending) return;
+    cli_vcp->rx_event_pending = true;
     cli_vcp_signal_internal_event(cli_vcp, CliVcpInternalEventRx);
 }
 
@@ -188,6 +201,63 @@ static void cli_vcp_message_received(FuriEventLoopObject* object, void* context)
     api_lock_unlock(message.api_lock);
 }
 
+static void cli_vcp_handle_disconnected(CliVcp* cli_vcp) {
+    if(!cli_vcp->is_connected) return;
+    FURI_LOG_D(TAG, "Disconnected");
+    cli_vcp->is_connected = false;
+
+    // disconnect our side of the pipe
+    pipe_detach_from_event_loop(cli_vcp->own_pipe);
+    pipe_free(cli_vcp->own_pipe);
+    cli_vcp->own_pipe = NULL;
+
+    // wait for shell to stop
+    cli_shell_join(cli_vcp->shell);
+    cli_shell_free(cli_vcp->shell);
+    pipe_free(cli_vcp->shell_pipe);
+}
+
+static void cli_vcp_handle_connected(CliVcp* cli_vcp) {
+    if(cli_vcp->is_connected) return;
+    FURI_LOG_D(TAG, "Connected");
+    cli_vcp->is_connected = true;
+
+    // start shell thread
+    PipeSideBundle bundle = pipe_alloc(VCP_BUF_SIZE, 1);
+    cli_vcp->own_pipe = bundle.alices_side;
+    cli_vcp->shell_pipe = bundle.bobs_side;
+    pipe_attach_to_event_loop(cli_vcp->own_pipe, cli_vcp->event_loop);
+    pipe_set_callback_context(cli_vcp->own_pipe, cli_vcp);
+    pipe_set_data_arrived_callback(
+        cli_vcp->own_pipe, cli_vcp_data_from_shell, FuriEventLoopEventFlagEdge);
+    pipe_set_space_freed_callback(
+        cli_vcp->own_pipe, cli_vcp_shell_ready, FuriEventLoopEventFlagEdge);
+    furi_delay_ms(33); // we are too fast, minicom isn't ready yet
+    cli_vcp->shell = cli_shell_alloc(
+        cli_main_motd, NULL, cli_vcp->shell_pipe, cli_vcp->main_registry, &cli_main_ext_config);
+    cli_shell_start(cli_vcp->shell);
+}
+
+/**
+ * Called after events were dropped: bring the connection state back in line with
+ * the DTR line and restart the data flow in both directions.
+ */
+static void cli_vcp_resync(CliVcp* cli_vcp) {
+    if(!cli_vcp->is_enabled) return;
+
+    bool dtr_active = furi_hal_cdc_get_ctrl_line_state(VCP_IF_NUM) & CdcCtrlLineDTR;
+    if(dtr_active) {
+        cli_vcp_handle_connected(cli_vcp);
+    } else {
+        cli_vcp_handle_disconnected(cli_vcp);
+    }
+
+    if(cli_vcp->is_connected) {
+        cli_vcp_maybe_receive_data(cli_vcp);
+        cli_vcp_maybe_send_data(cli_vcp);
+    }
+}
+
 /**
  * Processes messages arriving from CDC event callbacks
  */
@@ -199,6 +269,8 @@ static void cli_vcp_internal_event_happened(FuriEventLoopObject* object, void* c
     switch(event) {
     case CliVcpInternalEventRx: {
         VCP_TRACE(TAG, "Rx");
+        // clear before reading so that data arriving meanwhile queues a new event
+        cli_vcp->rx_event_pending = false;
         cli_vcp_maybe_receive_data(cli_vcp);
         break;
     }
@@ -210,43 +282,20 @@ static void cli_vcp_internal_event_happened(FuriEventLoopObject* object, void* c
     }
 
     case CliVcpInternalEventDisconnected: {
-        if(!cli_vcp->is_connected) return;
-        FURI_LOG_D(TAG, "Disconnected");
-        cli_vcp->is_connected = false;
-
-        // disconnect our side of the pipe
-        pipe_detach_from_event_loop(cli_vcp->own_pipe);
-        pipe_free(cli_vcp->own_pipe);
-        cli_vcp->own_pipe = NULL;
-
-        // wait for shell to stop
-        cli_shell_join(cli_vcp->shell);
-        cli_shell_free(cli_vcp->shell);
-        pipe_free(cli_vcp->shell_pipe);
+        cli_vcp_handle_disconnected(cli_vcp);
         break;
     }
 
     case CliVcpInternalEventConnected: {
-        if(cli_vcp->is_connected) return;
-        FURI_LOG_D(TAG, "Connected");
-        cli_vcp->is_connected = true;
-
-        // start shell thread
-        PipeSideBundle bundle = pipe_alloc(VCP_BUF_SIZE, 1);
-        cli_vcp->own_pipe = bundle.alices_side;
-        cli_vcp->shell_pipe = bundle.bobs_side;
-        pipe_attach_to_event_loop(cli_vcp->own_pipe, cli_vcp->event_loop);
-        pipe_set_callback_context(cli_vcp->own_pipe, cli_vcp);
-        pipe_set_data_arrived_callback(
-            cli_vcp->own_pipe, cli_vcp_data_from_shell, FuriEventLoopEventFlagEdge);
-        pipe_set_space_freed_callback(
-            cli_vcp->own_pipe, cli_vcp_shell_ready, FuriEventLoopEventFlagEdge);
-        furi_delay_ms(33); // we are too fast, minicom isn't ready yet
-        cli_vcp->shell = cli_shell_alloc(
-            cli_main_motd, NULL, cli_vcp->shell_pipe, cli_vcp->main_registry, &cli_main_ext_config);
-        cli_shell_start(cli_vcp->shell);
+        cli_vcp_handle_connected(cli_vcp);
         break;
     }
+    }
+
+    if(cli_vcp->events_lost) {
+        cli_vcp->events_lost = false;
+        FURI_LOG_W(TAG, "Events were dropped, resyncing");
+        cli_vcp_resync(cli_vcp);
     }
 }
 
