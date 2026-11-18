@@ -129,8 +129,14 @@ void momentum_settings_load(void) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* file = flipper_format_file_alloc(storage);
     // Fall back to the .bak left by an interrupted save (see momentum_settings_save).
-    if(flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH) ||
-       flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH ".bak")) {
+    // A failed open still leaves the path registered as open in the storage
+    // service until the handle is closed, so close before reusing the handle.
+    bool opened = flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH);
+    if(!opened) {
+        flipper_format_file_close(file);
+        opened = flipper_format_file_open_existing(file, MOMENTUM_SETTINGS_PATH ".bak");
+    }
+    if(opened) {
         FuriString* val_str = furi_string_alloc();
         int32_t val_int;
         uint32_t val_uint;
@@ -218,15 +224,13 @@ void momentum_settings_save(void) {
         bool had_old = storage_common_exists(storage, MOMENTUM_SETTINGS_PATH);
         if(had_old) {
             storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".bak");
-            storage_common_rename(
-                storage, MOMENTUM_SETTINGS_PATH, MOMENTUM_SETTINGS_PATH ".bak");
+            storage_common_rename(storage, MOMENTUM_SETTINGS_PATH, MOMENTUM_SETTINGS_PATH ".bak");
         }
-        if(storage_common_rename(
-               storage, MOMENTUM_SETTINGS_PATH ".tmp", MOMENTUM_SETTINGS_PATH) == FSE_OK) {
+        if(storage_common_rename(storage, MOMENTUM_SETTINGS_PATH ".tmp", MOMENTUM_SETTINGS_PATH) ==
+           FSE_OK) {
             storage_common_remove(storage, MOMENTUM_SETTINGS_PATH ".bak");
         } else if(had_old) {
-            storage_common_rename(
-                storage, MOMENTUM_SETTINGS_PATH ".bak", MOMENTUM_SETTINGS_PATH);
+            storage_common_rename(storage, MOMENTUM_SETTINGS_PATH ".bak", MOMENTUM_SETTINGS_PATH);
         }
     } else {
         // Failed or partial write: keep the existing settings untouched.
