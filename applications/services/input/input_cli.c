@@ -20,7 +20,9 @@ static void input_cli_dump_events_callback(const void* value, void* ctx) {
     furi_assert(value);
     furi_assert(ctx);
     FuriMessageQueue* input_queue = ctx;
-    furi_message_queue_put(input_queue, value, FuriWaitForever);
+    // Runs on the input thread with the pubsub mutex held: never block here, a
+    // stalled terminal would freeze all buttons. Drop events when the queue is full
+    furi_message_queue_put(input_queue, value, 0);
 }
 
 static void input_cli_dump(PipeSide* pipe, FuriString* args, FuriPubSub* event_pubsub) {

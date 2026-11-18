@@ -213,7 +213,6 @@ static void storage_cli_read(PipeSide* pipe, FuriString* path, FuriString* args)
 }
 
 static void storage_cli_write(PipeSide* pipe, FuriString* path, FuriString* args) {
-    UNUSED(pipe);
     UNUSED(args);
     Storage* api = furi_record_open(RECORD_STORAGE);
     File* file = storage_file_alloc(api);
@@ -226,21 +225,11 @@ static void storage_cli_write(PipeSide* pipe, FuriString* path, FuriString* args
 
         uint32_t read_index = 0;
 
-        while(true) {
-            uint8_t symbol = getchar();
+        while(pipe_state(pipe) == PipeStateOpen) {
+            int symbol = getchar();
 
-            if(symbol == CliKeyETX) {
-                size_t write_size = read_index % buffer_size;
-
-                if(write_size > 0) {
-                    size_t written_size = storage_file_write(file, buffer, write_size);
-
-                    if(written_size != write_size) {
-                        storage_cli_print_error(storage_file_get_error(file));
-                    }
-                    break;
-                }
-            }
+            // EOF: the host is gone, Ctrl+C: end of input. Never store either as data
+            if(symbol == EOF || symbol == CliKeyETX) break;
 
             buffer[read_index % buffer_size] = symbol;
             printf("%c", buffer[read_index % buffer_size]);
@@ -254,6 +243,16 @@ static void storage_cli_write(PipeSide* pipe, FuriString* path, FuriString* args
                     storage_cli_print_error(storage_file_get_error(file));
                     break;
                 }
+            }
+        }
+
+        // Flush what is left in the buffer (nothing after a failed full-block write)
+        size_t write_size = read_index % buffer_size;
+        if(write_size > 0) {
+            size_t written_size = storage_file_write(file, buffer, write_size);
+
+            if(written_size != write_size) {
+                storage_cli_print_error(storage_file_get_error(file));
             }
         }
         printf("\r\n");
