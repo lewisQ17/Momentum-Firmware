@@ -273,7 +273,20 @@ bool load_game(SnakeState* snake_state) {
 
     furi_record_close(RECORD_STORAGE);
 
-    return bytes_readed == sizeof(SnakeState);
+    if(bytes_readed != sizeof(SnakeState)) return false;
+
+    // the save file is untrusted: len indexes points[] and the points index the 31x15 field
+    if(snake_state->len < 2 || snake_state->len >= MAX_SNAKE_LEN) return false;
+    if(snake_state->currentMovement > DirectionLeft || snake_state->nextMovement > DirectionLeft ||
+       snake_state->state > GameStateGameOver) {
+        return false;
+    }
+    for(uint16_t i = 0; i < snake_state->len; i++) {
+        if(snake_state->points[i].x >= 31 || snake_state->points[i].y >= 15) return false;
+    }
+    if(snake_state->fruit.x >= 31 || snake_state->fruit.y >= 15) return false;
+
+    return true;
 }
 
 void save_game(const SnakeState* snake_state) {
