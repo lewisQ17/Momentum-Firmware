@@ -109,20 +109,36 @@ void table_table_list_init(void* ctx) {
     pb->table_list.selected = 0;
 }
 
-// json parse helper function
+// json parse helper functions
+// nx_json keeps the value of a node in a union, so the node type must be checked before reading it
+
+static bool json_is_number(const nx_json* item) {
+    return item && (item->type == NX_JSON_INTEGER || item->type == NX_JSON_float);
+}
+
+static bool json_string_equals(const nx_json* item, const char* str) {
+    return item && item->type == NX_JSON_STRING && item->text_value &&
+           !strcmp(item->text_value, str);
+}
+
 bool table_file_parse_vec2(const nx_json* json, const char* key, Vec2& v) {
     const nx_json* item = nx_json_get(json, key);
-    if(!item || item->children.length != 2) {
+    if(!item || item->type != NX_JSON_ARRAY || item->children.length != 2) {
         return false;
     }
-    v.x = nx_json_item(item, 0)->num.dbl_value;
-    v.y = nx_json_item(item, 1)->num.dbl_value;
+    const nx_json* x = nx_json_item(item, 0);
+    const nx_json* y = nx_json_item(item, 1);
+    if(!json_is_number(x) || !json_is_number(y)) {
+        return false;
+    }
+    v.x = x->num.dbl_value;
+    v.y = y->num.dbl_value;
     return true;
 }
 
 bool table_file_parse_int(const nx_json* json, const char* key, int& v) {
     const nx_json* item = nx_json_get(json, key);
-    if(!item) return false;
+    if(!item || (item->type != NX_JSON_INTEGER && item->type != NX_JSON_BOOL)) return false;
     v = item->num.u_value;
     return true;
 }
@@ -138,7 +154,7 @@ bool table_file_parse_bool(const nx_json* json, const char* key, bool& v) {
 
 bool table_file_parse_float(const nx_json* json, const char* key, float& v) {
     const nx_json* item = nx_json_get(json, key);
-    if(!item) return false;
+    if(!json_is_number(item)) return false;
     v = item->num.dbl_value;
     return true;
 }
@@ -241,15 +257,18 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         const nx_json* lives = nx_json_get(json, "lives");
         if(lives) {
             table_file_parse_int(lives, "value", table->lives.value);
+            // Lives::draw loops once per life every frame
+            if(table->lives.value < 1) table->lives.value = 1;
+            if(table->lives.value > 9) table->lives.value = 9;
             table_file_parse_bool(lives, "display", table->lives.display);
             table_file_parse_vec2(lives, "position", table->lives.p);
             const nx_json* align = nx_json_get(lives, "align");
-            if(align && !strcmp(align->text_value, "VERTICAL")) {
+            if(json_string_equals(align, "VERTICAL")) {
                 table->lives.alignment = Lives::Vertical;
             }
         }
         const nx_json* tilt = nx_json_get(json, "tilt_detect");
-        if(tilt) {
+        if(tilt && (tilt->type == NX_JSON_INTEGER || tilt->type == NX_JSON_BOOL)) {
             table->tilt_detect_enabled = tilt->num.u_value > 0 ? true : false;
         }
         const nx_json* score = nx_json_get(json, "score");
@@ -259,7 +278,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* balls = nx_json_get(json, "balls");
-        if(balls) {
+        if(balls && balls->type == NX_JSON_ARRAY) {
             for(int i = 0; i < balls->children.length; i++) {
                 const nx_json* ball = nx_json_item(balls, i);
                 if(!ball) continue;
@@ -310,7 +329,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* flippers = nx_json_get(json, "flippers");
-        if(flippers) {
+        if(flippers && flippers->type == NX_JSON_ARRAY) {
             for(int i = 0; i < flippers->children.length; i++) {
                 const nx_json* flipper = nx_json_item(flippers, i);
 
@@ -329,7 +348,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
 
                 const nx_json* side = nx_json_get(flipper, "side");
                 Flipper::Side sd = Flipper::LEFT;
-                if(side && !strcmp(side->text_value, "RIGHT")) {
+                if(json_string_equals(side, "RIGHT")) {
                     sd = Flipper::RIGHT;
                 }
 
@@ -342,7 +361,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* bumpers = nx_json_get(json, "bumpers");
-        if(bumpers) {
+        if(bumpers && bumpers->type == NX_JSON_ARRAY) {
             for(int i = 0; i < bumpers->children.length; i++) {
                 const nx_json* bumper = nx_json_item(bumpers, i);
 
@@ -385,7 +404,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
 
         constexpr float pi_180 = M_PI / 180;
         const nx_json* arcs = nx_json_get(json, "arcs");
-        if(arcs) {
+        if(arcs && arcs->type == NX_JSON_ARRAY) {
             for(int i = 0; i < arcs->children.length; i++) {
                 const nx_json* arc = nx_json_item(arcs, i);
 
@@ -417,7 +436,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
 
                 Arc::Surface surface = Arc::OUTSIDE;
                 const nx_json* stype = nx_json_get(arc, "surface");
-                if(stype && !strcmp(stype->text_value, "INSIDE")) {
+                if(json_string_equals(stype, "INSIDE")) {
                     surface = Arc::INSIDE;
                 }
 
@@ -428,7 +447,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* rails = nx_json_get(json, "rails");
-        if(rails) {
+        if(rails && rails->type == NX_JSON_ARRAY) {
             for(int i = 0; i < rails->children.length; i++) {
                 const nx_json* rail = nx_json_item(rails, i);
 
@@ -485,7 +504,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* portals = nx_json_get(json, "portals");
-        if(portals) {
+        if(portals && portals->type == NX_JSON_ARRAY) {
             for(int i = 0; i < portals->children.length; i++) {
                 const nx_json* portal = nx_json_item(portals, i);
 
@@ -546,7 +565,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* rollovers = nx_json_get(json, "rollovers");
-        if(rollovers) {
+        if(rollovers && rollovers->type == NX_JSON_ARRAY) {
             for(int i = 0; i < rollovers->children.length; i++) {
                 const nx_json* rollover = nx_json_item(rollovers, i);
 
@@ -564,7 +583,8 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
                 }
                 char sym = '*';
                 const nx_json* symbol = nx_json_get(rollover, "symbol");
-                if(symbol) {
+                if(symbol && symbol->type == NX_JSON_STRING && symbol->text_value &&
+                   symbol->text_value[0] != '\0') {
                     sym = symbol->text_value[0];
                 }
                 Rollover* new_rollover = new Rollover(p, sym);
@@ -576,7 +596,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
         }
 
         const nx_json* turbos = nx_json_get(json, "turbos");
-        if(turbos) {
+        if(turbos && turbos->type == NX_JSON_ARRAY) {
             for(int i = 0; i < turbos->children.length; i++) {
                 const nx_json* turbo = nx_json_item(turbos, i);
 
@@ -614,7 +634,7 @@ Table* table_load_table_from_file(PinballApp* pb, size_t index) {
 
     } while(false);
 
-    if(!table->sm.validate(pb->text, 256)) {
+    if(table && !table->sm.validate(pb->text, 256)) {
         FURI_LOG_E(TAG, "Signal validation failed!");
         delete table;
         table = NULL;

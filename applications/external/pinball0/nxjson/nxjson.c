@@ -250,6 +250,10 @@ static char* parse_key(const char** key, char* p, nx_json_unicode_encoder encode
     return 0; // error
 }
 
+// parse_value recurses once per nesting level and the app thread has a tiny stack
+#define NX_JSON_MAX_DEPTH 16
+static unsigned nx_json_depth;
+
 static char*
     parse_value(nx_json* parent, const char* key, char* p, nx_json_unicode_encoder encoder) {
     nx_json* js;
@@ -267,23 +271,39 @@ static char*
             p++;
             break;
         case '{':
+            if(nx_json_depth >= NX_JSON_MAX_DEPTH) {
+                NX_JSON_REPORT_ERROR("nesting too deep", p);
+                return 0; // error
+            }
+            nx_json_depth++;
             js = create_json(NX_JSON_OBJECT, key, parent);
             p++;
             while(1) {
                 const char* new_key = NULL;
                 p = parse_key(&new_key, p, encoder);
                 if(!p) return 0; // error
-                if(*p == '}') return p + 1; // end of object
+                if(*p == '}') {
+                    nx_json_depth--;
+                    return p + 1; // end of object
+                }
                 p = parse_value(js, new_key, p, encoder);
                 if(!p) return 0; // error
             }
         case '[':
+            if(nx_json_depth >= NX_JSON_MAX_DEPTH) {
+                NX_JSON_REPORT_ERROR("nesting too deep", p);
+                return 0; // error
+            }
+            nx_json_depth++;
             js = create_json(NX_JSON_ARRAY, key, parent);
             p++;
             while(1) {
                 p = parse_value(js, 0, p, encoder);
                 if(!p) return 0; // error
-                if(*p == ']') return p + 1; // end of array
+                if(*p == ']') {
+                    nx_json_depth--;
+                    return p + 1; // end of array
+                }
             }
         case ']':
             return p;
@@ -384,6 +404,7 @@ const nx_json* nx_json_parse_utf8(char* text) {
 
 const nx_json* nx_json_parse(char* text, nx_json_unicode_encoder encoder) {
     nx_json js = {0};
+    nx_json_depth = 0;
     if(!parse_value(&js, 0, text, encoder)) {
         if(js.children.first) nx_json_free(js.children.first);
         return 0;
@@ -393,6 +414,8 @@ const nx_json* nx_json_parse(char* text, nx_json_unicode_encoder encoder) {
 
 const nx_json* nx_json_get(const nx_json* json, const char* key) {
     nx_json* js;
+    // only objects and arrays have children: the children fields overlap the value of other types
+    if(!json || (json->type != NX_JSON_OBJECT && json->type != NX_JSON_ARRAY)) return NULL;
     for(js = json->children.first; js; js = js->next) {
         if(js->key && !strcmp(js->key, key)) return js;
     }
@@ -401,6 +424,7 @@ const nx_json* nx_json_get(const nx_json* json, const char* key) {
 
 const nx_json* nx_json_item(const nx_json* json, int idx) {
     nx_json* js;
+    if(!json || (json->type != NX_JSON_OBJECT && json->type != NX_JSON_ARRAY)) return NULL;
     for(js = json->children.first; js; js = js->next) {
         if(!idx--) return js;
     }
