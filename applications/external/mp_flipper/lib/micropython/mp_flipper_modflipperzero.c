@@ -469,8 +469,9 @@ static mp_obj_t flipperzero_infrared_receive(size_t n_args, const mp_obj_t* args
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(flipperzero_infrared_receive_obj, 0, 1, flipperzero_infrared_receive);
 
-inline static uint32_t flipperzero_infrared_tx_signal_provider(mp_obj_t* signal, const size_t index) {
-    return mp_obj_get_int(signal[index]);
+// runs in the TX interrupt: only reads the plain timing array, never calls into the interpreter
+inline static uint32_t flipperzero_infrared_tx_signal_provider(void* signal, const size_t index) {
+    return ((const uint32_t*)signal)[index];
 }
 
 static mp_obj_t flipperzero_infrared_transmit(size_t n_args, const mp_obj_t* args) {
@@ -484,10 +485,19 @@ static mp_obj_t flipperzero_infrared_transmit(size_t n_args, const mp_obj_t* arg
     mp_int_t frequency = n_args > 3 ? mp_obj_get_int(args[3]) : MP_FLIPPER_INFRARED_TX_DEFAULT_FREQUENCY;
     mp_float_t duty_cycle = n_args > 4 ? mp_obj_get_float(args[4]) : MP_FLIPPER_INFRARED_TX_DEFAULT_DUTY_CYCLE;
 
-    return mp_flipper_infrared_transmit(
-               signal, length, flipperzero_infrared_tx_signal_provider, repeat, frequency, duty_cycle, use_external_pin) ?
-               mp_const_true :
-               mp_const_false;
+    // convert the signal up front so a bad list item raises here and not inside the TX interrupt
+    uint32_t* timings = m_new(uint32_t, length > 0 ? length : 1);
+
+    for(size_t i = 0; i < length; i++) {
+        timings[i] = mp_obj_get_int(signal[i]);
+    }
+
+    const bool result = mp_flipper_infrared_transmit(
+        timings, length, flipperzero_infrared_tx_signal_provider, repeat, frequency, duty_cycle, use_external_pin);
+
+    m_del(uint32_t, timings, length > 0 ? length : 1);
+
+    return result ? mp_const_true : mp_const_false;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(flipperzero_infrared_transmit_obj, 1, 5, flipperzero_infrared_transmit);
 

@@ -105,6 +105,9 @@ inline bool mp_flipper_gpio_init_pin(
     furi_hal_gpio_init(pin, mode, pull, speed);
 
     if(raw_mode & (MP_FLIPPER_GPIO_MODE_INTERRUPT_FALL | MP_FLIPPER_GPIO_MODE_INTERRUPT_RISE)) {
+        // re-initialising an interrupt pin must not trip the 'callback == NULL' check
+        furi_hal_gpio_disable_int_callback(pin);
+        furi_hal_gpio_remove_int_callback(pin);
         furi_hal_gpio_add_int_callback(pin, mp_flipper_on_gpio, (void*)raw_pin);
         furi_hal_gpio_enable_int_callback(pin);
     } else {
@@ -113,7 +116,10 @@ inline bool mp_flipper_gpio_init_pin(
     }
 
     if(raw_mode == MP_FLIPPER_GPIO_MODE_ANALOG) {
-        ctx->adc_handle = furi_hal_adc_acquire();
+        // the ADC mutex is not recursive: acquire it only once
+        if(ctx->adc_handle == NULL) {
+            ctx->adc_handle = furi_hal_adc_acquire();
+        }
 
         furi_hal_adc_configure(ctx->adc_handle);
     }

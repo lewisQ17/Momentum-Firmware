@@ -89,6 +89,12 @@ inline bool mp_flipper_infrared_transmit(
         return false;
     }
 
+    // the HAL crashes the device on an out of range carrier frequency or duty cycle
+    if(frequency < INFRARED_MIN_FREQUENCY || frequency > INFRARED_MAX_FREQUENCY || !(duty > 0.0f) ||
+       duty > 1.0f) {
+        return false;
+    }
+
     const mp_flipper_context_t* ctx = mp_flipper_context;
 
     mp_flipper_infrared_tx_t* session = ctx->infrared_tx;
