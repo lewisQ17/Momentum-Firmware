@@ -374,10 +374,53 @@ static bool archive_extract_current_file(TarArchive* archive, const char* dst_pa
     return success;
 }
 
+// Reject entry names that could escape the extraction directory (zip-slip).
+// Entry names are joined onto the destination without normalising them.
+//
+// The check runs on the exact string path_append() will use (whitespace trimmed,
+// then '/'), so a name like " ../x" cannot pass here and turn into "../x" there.
+// A component made only of dots and blanks with two or more dots (".." but also
+// " .. ", "...") is rejected, as are control characters.
+static bool tar_archive_entry_name_is_safe(const char* name) {
+    FuriString* trimmed = furi_string_alloc_set(name);
+    furi_string_trim(trimmed);
+    furi_string_trim(trimmed, "/");
+
+    bool safe = true;
+    const char* p = furi_string_get_cstr(trimmed);
+    while(safe && *p) {
+        while(*p == '/' || *p == '\\')
+            p++;
+        size_t dots = 0;
+        bool only_dots_and_blanks = true;
+        for(; *p && *p != '/' && *p != '\\'; p++) {
+            const unsigned char c = (unsigned char)*p;
+            if(c < 0x20 || c == 0x7f) {
+                safe = false;
+                break;
+            }
+            if(c == '.') {
+                dots++;
+            } else if(c != ' ' && c != '\t') {
+                only_dots_and_blanks = false;
+            }
+        }
+        if(only_dots_and_blanks && dots >= 2) safe = false;
+    }
+
+    furi_string_free(trimmed);
+    return safe;
+}
+
 static int archive_extract_foreach_cb(mtar_t* tar, const mtar_header_t* header, void* param) {
     UNUSED(tar);
     TarArchiveDirectoryOpParams* op_params = param;
     TarArchive* archive = op_params->archive;
+
+    if(!tar_archive_entry_name_is_safe(header->name)) {
+        FURI_LOG_W(TAG, "unsafe path: skipping entry \"%s\"", header->name);
+        return 0;
+    }
 
     bool skip_entry = false;
     if(archive->unpack_cb) {
@@ -416,6 +459,11 @@ static int archive_extract_foreach_cb(mtar_t* tar, const mtar_header_t* header, 
     FuriString* converted_fname = furi_string_alloc_set(header->name);
     if(op_params->converter) {
         op_params->converter(converted_fname);
+    }
+    if(!tar_archive_entry_name_is_safe(furi_string_get_cstr(converted_fname))) {
+        FURI_LOG_W(TAG, "unsafe path: skipping entry \"%s\"", header->name);
+        furi_string_free(converted_fname);
+        return 0;
     }
 
     full_extracted_fname = furi_string_alloc();

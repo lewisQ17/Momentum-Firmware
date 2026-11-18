@@ -29,47 +29,6 @@ static void archive_extract_dest_from_path(const char* archive_path, FuriString*
     }
 }
 
-// Skip entries with a ".." path component (zip-slip): tar_archive joins entry
-// names onto the destination without normalising them, so they could write
-// outside it.
-//
-// The check runs on the exact string path_append() will use (whitespace trimmed,
-// then '/'), so a name like " ../x" cannot pass here and turn into "../x" there.
-// A component made only of dots and blanks with two or more dots (".." but also
-// " .. ", "...") is rejected, as are control characters.
-static bool archive_extract_entry_filter(const char* name, bool is_directory, void* context) {
-    UNUSED(is_directory);
-    UNUSED(context);
-    FuriString* trimmed = furi_string_alloc_set(name);
-    furi_string_trim(trimmed);
-    furi_string_trim(trimmed, "/");
-
-    bool safe = true;
-    const char* p = furi_string_get_cstr(trimmed);
-    while(safe && *p) {
-        while(*p == '/' || *p == '\\')
-            p++;
-        size_t dots = 0;
-        bool only_dots_and_blanks = true;
-        for(; *p && *p != '/' && *p != '\\'; p++) {
-            const unsigned char c = (unsigned char)*p;
-            if(c < 0x20 || c == 0x7f) {
-                safe = false;
-                break;
-            }
-            if(c == '.') {
-                dots++;
-            } else if(c != ' ' && c != '\t') {
-                only_dots_and_blanks = false;
-            }
-        }
-        if(only_dots_and_blanks && dots >= 2) safe = false;
-    }
-
-    furi_string_free(trimmed);
-    return safe;
-}
-
 // Blocking unpack (mirrors how the OTA updater / storage_cli extract). Runs while
 // the loading popup is shown on the stack view, which is drawn by the GUI service
 // thread independently of this (blocking) app thread.
@@ -79,7 +38,6 @@ static bool archive_extract_perform(const char* archive_path, const char* dest_d
     TarArchive* tar = tar_archive_alloc(storage);
     bool ok = false;
     if(tar_archive_open(tar, archive_path, tar_archive_get_mode_for_path(archive_path))) {
-        tar_archive_set_file_callback(tar, archive_extract_entry_filter, NULL);
         ok = tar_archive_unpack_to(tar, dest_dir, NULL);
     }
     tar_archive_free(tar);
