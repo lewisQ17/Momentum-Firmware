@@ -319,6 +319,7 @@ bool unitemp_sensors_load(void* context) {
 
     bool success = false;
     bool migration = false;
+    bool lines_dropped = false;
 
     do {
         if(!file_stream_open(
@@ -374,6 +375,7 @@ bool unitemp_sensors_load(void* context) {
             if(sscanf(line_cstr, "%10s %10s %d %n", name, model, &temp_offset, &str_offset) != 3 ||
                str_offset < 0) {
                 FURI_LOG_E(APP_NAME, "Malformed sensors file line, skipped");
+                lines_dropped = true;
                 continue;
             }
             char* args = ((char*)(line_cstr + str_offset));
@@ -404,7 +406,8 @@ bool unitemp_sensors_load(void* context) {
             } else {
                 FURI_LOG_E(
                     APP_NAME, "Unsupported sensor name (%s) or sensor model (%s)", name, model);
-                break;
+                lines_dropped = true;
+                continue;
             }
         }
         file_stream_close(app->file_stream);
@@ -420,11 +423,16 @@ bool unitemp_sensors_load(void* context) {
     }
     if(migration) {
         unitemp_sensors_save(app);
-        FS_Error error = storage_simply_remove_recursive(app->storage, "/ext/unitemp");
-        if(error == FSE_OK) {
-            FURI_LOG_I(APP_NAME, "Old Unitemp folder deleted successfully");
+        if(lines_dropped) {
+            // keep the old folder: some lines were not loaded and would be lost
+            FURI_LOG_W(APP_NAME, "Old Unitemp folder kept: some sensor lines were skipped");
         } else {
-            FURI_LOG_W(APP_NAME, "Failed to delete old Unitemp folder. Error: %d", error);
+            FS_Error error = storage_simply_remove_recursive(app->storage, "/ext/unitemp");
+            if(error == FSE_OK) {
+                FURI_LOG_I(APP_NAME, "Old Unitemp folder deleted successfully");
+            } else {
+                FURI_LOG_W(APP_NAME, "Failed to delete old Unitemp folder. Error: %d", error);
+            }
         }
     }
 
