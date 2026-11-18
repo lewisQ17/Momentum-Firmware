@@ -159,6 +159,11 @@ static Type4TagError type_4_tag_listener_iso_read(
             }
         }
         const uint8_t* ndef_data = simple_array_cget_data(instance->data->ndef_data);
+        // Le is reader-supplied (up to 256 / 65536), keep the reply inside tx_buffer
+        le =
+            MIN(le,
+                TYPE_4_TAG_BUF_SIZE - bit_buffer_get_size_bytes(instance->tx_buffer) -
+                    sizeof(type_4_tag_success_apdu));
         bit_buffer_append_bytes(
             instance->tx_buffer, &ndef_data[offset], MIN(ndef_file_len - offset, le));
         bit_buffer_append_bytes(

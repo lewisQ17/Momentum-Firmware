@@ -23,6 +23,9 @@ void nfc_scene_start_on_enter(void* context) {
     // Clear file name and device contents
     furi_string_reset(nfc->file_name);
     nfc_device_clear(nfc->nfc_device);
+    // Drop a pending "Save as UID-only" backup (e.g. after a failed save), else
+    // the next Read menu would restore the old card over a freshly read one
+    if(nfc->uid_backup_device) nfc_device_clear(nfc->uid_backup_device);
     iso14443_3a_reset(nfc->iso14443_3a_edit_data);
     // Reset detected protocols list
     nfc_detected_protocols_reset(nfc->detected_protocols);
