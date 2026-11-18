@@ -632,12 +632,15 @@ int32_t bomberduck_app(void* p) {
     // Return to normal backlight settings
     notification_message_block(notification, &sequence_display_backlight_enforce_auto);
     furi_record_close(RECORD_NOTIFICATION);
-    // Специальная очистка памяти, занимаемой очередью
-    furi_message_queue_free(event_queue);
 
     // Чистим созданные объекты, связанные с интерфейсом
+    // (the view port first: its input callback still uses the queue)
+    view_port_enabled_set(view_port, false);
     gui_remove_view_port(gui, view_port);
     view_port_free(view_port);
+
+    // Специальная очистка памяти, занимаемой очередью
+    furi_message_queue_free(event_queue);
 
     furi_mutex_free(bomber_state->mutex);
     furi_record_close(RECORD_GUI);

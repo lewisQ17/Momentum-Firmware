@@ -273,17 +273,18 @@ int32_t trexrunner_app() {
             }
         }
 
-        furi_mutex_release(game_state->mutex);
+        // the main loop never takes the game mutex, so it must not release it either
         view_port_update(view_port);
     }
 
+    // stop the timer and the view port first: both still use the mutex and the game state
+    furi_timer_free(game_state->timer);
     view_port_enabled_set(view_port, false);
     gui_remove_view_port(gui, view_port);
     furi_record_close("gui");
     view_port_free(view_port);
     furi_message_queue_free(event_queue);
     furi_mutex_free(game_state->mutex);
-    furi_timer_free(game_state->timer);
     free(game_state);
 
     return 0;

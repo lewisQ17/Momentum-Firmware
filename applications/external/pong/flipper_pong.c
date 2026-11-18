@@ -281,11 +281,13 @@ int32_t flipper_pong_app(void* p) {
     }
 
     notification_message(notification, &sequence_reset_rgb);
-    furi_message_queue_free(event_queue);
-    furi_mutex_free(players.mutex);
+    // stop everything that can still use the queue and mutex before freeing them
+    furi_timer_free(timer);
+    view_port_enabled_set(view_port, false);
     gui_remove_view_port(gui, view_port);
     view_port_free(view_port);
-    furi_timer_free(timer);
+    furi_message_queue_free(event_queue);
+    furi_mutex_free(players.mutex);
     furi_record_close(RECORD_GUI);
     furi_record_close(RECORD_NOTIFICATION);
 
