@@ -360,18 +360,21 @@ uint8_t* pokemon_icon_get(PokemonData* pdata, int num) {
     bool is_error = true;
 
     if(pdata->bitmap_num != num) {
-        if(pdata->bitmap) {
+        /* bitmap_num == 0 means the bitmap points into const flash, do not free it */
+        if(pdata->bitmap && pdata->bitmap_num != 0) {
             free(pdata->bitmap);
-            pdata->bitmap = NULL;
         }
+        pdata->bitmap = NULL;
 
         file = storage_file_alloc(pdata->storage);
         path = furi_string_alloc_set(pdata->asset_path);
         furi_string_cat_printf(path, "all_sprites.fxbm");
 
-        if(storage_file_open(file, furi_string_get_cstr(path), FSAM_READ, FSOM_OPEN_EXISTING)) {
+        if(num > 0 &&
+           storage_file_open(file, furi_string_get_cstr(path), FSAM_READ, FSOM_OPEN_EXISTING)) {
             storage_file_seek(file, (num - 1) * FXBM_SPRITE_SIZE, true);
-            if(storage_file_read(file, &size, sizeof(size)) == sizeof(size)) {
+            if(storage_file_read(file, &size, sizeof(size)) == sizeof(size) &&
+               size == FXBM_SPRITE_SIZE - sizeof(size)) {
                 pdata->bitmap = malloc(size);
                 if(storage_file_read(file, pdata->bitmap, size) ==
                    FXBM_SPRITE_SIZE - sizeof(size)) {
