@@ -84,29 +84,38 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
         return false;
     }
 
+    // read and validate the fixed header first, so a rejected file leaves the current song intact
+    char song_name[sizeof(song->song_name)] = {0};
+    uint8_t loop_start = 0, loop_end = 0, speed = 0, rate = 0;
+    uint16_t pattern_length = 0, num_sequence_steps = 0;
+
+    rwops = stream_read(stream, (uint8_t*)song_name, sizeof(song_name));
+    rwops = stream_read(stream, (uint8_t*)&loop_start, sizeof(loop_start));
+    rwops = stream_read(stream, (uint8_t*)&loop_end, sizeof(loop_end));
+    rwops = stream_read(stream, (uint8_t*)&pattern_length, sizeof(pattern_length));
+
+    if(pattern_length == 0 || pattern_length > MAX_PATTERN_LENGTH) {
+        return false;
+    }
+
+    rwops = stream_read(stream, (uint8_t*)&speed, sizeof(speed));
+    rwops = stream_read(stream, (uint8_t*)&rate, sizeof(rate));
+    rwops = stream_read(stream, (uint8_t*)&num_sequence_steps, sizeof(num_sequence_steps));
+
+    if(num_sequence_steps > MAX_SEQUENCE_LENGTH) {
+        return false;
+    }
+
     tracker_engine_deinit_song(song, false);
     memset(song, 0, sizeof(TrackerSong));
 
-    rwops = stream_read(stream, (uint8_t*)song->song_name, sizeof(song->song_name));
-    rwops = stream_read(stream, (uint8_t*)&song->loop_start, sizeof(song->loop_start));
-    rwops = stream_read(stream, (uint8_t*)&song->loop_end, sizeof(song->loop_end));
-    rwops = stream_read(stream, (uint8_t*)&song->pattern_length, sizeof(song->pattern_length));
-
-    if(song->pattern_length == 0 || song->pattern_length > MAX_PATTERN_LENGTH) {
-        song->pattern_length = 0;
-        return false;
-    }
-
-    rwops = stream_read(stream, (uint8_t*)&song->speed, sizeof(song->speed));
-    rwops = stream_read(stream, (uint8_t*)&song->rate, sizeof(song->rate));
-
-    rwops =
-        stream_read(stream, (uint8_t*)&song->num_sequence_steps, sizeof(song->num_sequence_steps));
-
-    if(song->num_sequence_steps > MAX_SEQUENCE_LENGTH) {
-        song->num_sequence_steps = 0;
-        return false;
-    }
+    memcpy(song->song_name, song_name, sizeof(song->song_name));
+    song->loop_start = loop_start;
+    song->loop_end = loop_end;
+    song->pattern_length = pattern_length;
+    song->speed = speed;
+    song->rate = rate;
+    song->num_sequence_steps = num_sequence_steps;
 
     for(uint16_t i = 0; i < song->num_sequence_steps; i++) {
         rwops = stream_read(
@@ -127,12 +136,12 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
             sizeof(TrackerSongPatternStep) * (song->pattern_length));
     }
 
-    rwops = stream_read(stream, (uint8_t*)&song->num_instruments, sizeof(song->num_instruments));
-
-    if(song->num_instruments > MAX_INSTRUMENTS) {
-        song->num_instruments = 0;
-        ensure_default_instrument(song);
-        return false;
+    // the editor and engine always expect pattern 0 to exist
+    if(song->num_patterns == 0) {
+        song->pattern[0].step = (TrackerSongPatternStep*)malloc(
+            sizeof(TrackerSongPatternStep) * (song->pattern_length));
+        set_empty_pattern(&song->pattern[0], song->pattern_length);
+        song->num_patterns = 1;
     }
 
     // sequence steps may only point at patterns that were really loaded
@@ -142,6 +151,14 @@ bool load_song_inner(TrackerSong* song, Stream* stream) {
                 song->sequence.sequence_step[i].pattern_indices[ch] = 0;
             }
         }
+    }
+
+    rwops = stream_read(stream, (uint8_t*)&song->num_instruments, sizeof(song->num_instruments));
+
+    if(song->num_instruments > MAX_INSTRUMENTS) {
+        song->num_instruments = 0;
+        ensure_default_instrument(song);
+        return false;
     }
 
     for(uint16_t i = 0; i < song->num_instruments; i++) {
