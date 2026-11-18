@@ -364,7 +364,9 @@ static void ldtoypad_scene_emulate_draw_render_callback(Canvas* canvas, void* co
     // when the box is filled, draw the minifigure icon
     for(int i = 0; i < NUM_BOXES; i++) {
         if(boxInfo[i].isFilled) {
-            Token* token = emulator->tokens[boxInfo[i].index];
+            // the token may already be removed while the box is still marked filled
+            Token* token = ToyPadEmu_get_token(boxInfo[i].index);
+            if(!token) continue;
             if(model->show_icons_index) {
                 if(is_minifig(
                        token)) { // Only minifigures have an id, vehicles have no id, but is stored in the "token[180]"

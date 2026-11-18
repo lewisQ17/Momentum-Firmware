@@ -207,7 +207,7 @@ void hid_out_callback(usbd_device* dev, uint8_t event, uint8_t ep) {
     Frame frame;
     parse_frame(&frame, req_buf, len);
 
-    if(frame.len == 0) return;
+    if(frame.len < 2) return;
 
     Request request;
 
@@ -256,8 +256,12 @@ void hid_out_callback(usbd_device* dev, uint8_t event, uint8_t ep) {
         token = ToyPadEmu_find_token_by_index(ind);
 
         if(token) {
-            int start = page * 4;
-            memcpy(response.payload + 1, token->token + start, 16);
+            size_t start = (size_t)page * 4;
+            if(start < sizeof(token->token)) {
+                size_t count = sizeof(token->token) - start;
+                if(count > 16) count = 16;
+                memcpy(response.payload + 1, token->token + start, count);
+            }
         }
 
         break;
@@ -323,7 +327,7 @@ void hid_out_callback(usbd_device* dev, uint8_t event, uint8_t ep) {
         Token* token = ToyPadEmu_find_token_by_index(ind);
         if(token) {
             // Copy 4 bytes of data to token->token at offset 4 * page
-            if(page >= 0 && page < 64) {
+            if(page >= 0 && (size_t)page < sizeof(token->token) / 4) {
                 memcpy(token->token + 4 * page, data, 4);
             }
 

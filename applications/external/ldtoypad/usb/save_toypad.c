@@ -329,11 +329,15 @@ void load_favorites(void) {
     if(!file) return;
 
     // Read num_favorites
-    if(storage_file_read(file, &num_favorites, sizeof(int))) {
+    if(storage_file_read(file, &num_favorites, sizeof(int)) == sizeof(int)) {
+        if(num_favorites < 0) num_favorites = 0;
         if(num_favorites > MAX_FAVORITES) num_favorites = MAX_FAVORITES;
 
         // Read the favorite_ids array
-        storage_file_read(file, favorite_ids, sizeof(int) * num_favorites);
+        size_t want = sizeof(int) * num_favorites;
+        if(storage_file_read(file, favorite_ids, want) != want) {
+            num_favorites = 0; // truncated file
+        }
     } else {
         num_favorites = 0; // File may be empty/corrupt
     }

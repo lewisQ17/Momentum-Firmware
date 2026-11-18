@@ -4,7 +4,13 @@ static void calculate_checksum(uint8_t* buf, int length, int place);
 
 // Function to parse a Frame from a buffer
 void parse_frame(Frame* frame, unsigned char* buf, int len) {
-    UNUSED(len);
+    frame->type = 0;
+    frame->len = 0;
+
+    // a frame needs its type and length bytes, and its payload has to fit both the report and Frame
+    if(len < 2) return;
+    if(buf[1] > sizeof(frame->payload) || buf[1] > len - 2) return;
+
     frame->type = buf[0];
     frame->len = buf[1];
     memcpy(frame->payload, buf + 2, frame->len);
@@ -22,6 +28,8 @@ int build_frame(Frame* frame, unsigned char* buf) {
 // Function to parse a Frame into a Request
 void parse_request(Request* request, Frame* f) {
     if(request == NULL || f == NULL) return;
+    // cmd and cid are mandatory, and the rest has to fit the request payload
+    if(f->len < 2 || (size_t)(f->len - 2) > sizeof(request->payload)) return;
 
     request->frame = *f;
     uint8_t* p = f->payload;
