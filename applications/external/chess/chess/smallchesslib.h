@@ -2999,17 +2999,33 @@ uint8_t SCL_boardFromFEN(SCL_Board board, const char* string) {
             if(c < '9') // empty square sequence
             {
                 while(c > '0') {
+                    if(square >= 64) // malformed FEN: more squares than the board has
+                    {
+                        SCL_boardInit(board);
+                        return 0;
+                    }
                     board[square] = '.';
                     square++;
                     c--;
                 }
             } else // piece
             {
+                if(square >= 64) // malformed FEN: more squares than the board has
+                {
+                    SCL_boardInit(board);
+                    return 0;
+                }
                 board[square] = c;
                 square++;
             }
         } else {
             if(square == 8) break;
+
+            if(square < 16) // malformed FEN: would wrap below the board
+            {
+                SCL_boardInit(board);
+                return 0;
+            }
 
             square -= 16;
         }
