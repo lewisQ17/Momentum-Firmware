@@ -83,7 +83,7 @@ static bool decode(uint8_t* bits, uint32_t numbytes, uint32_t numbits, ProtoView
     /* This is a variable length message, however the minimum length
      * requires a sender len byte (of value zero) and the terminator
      * FF 00 plus checksum: a total of 4 bytes. */
-    if(numbits - sync_len < 8 * 4) return false;
+    if(numbits < (uint32_t)sync_len + 8U * 4U) return false;
 
     uint64_t off = bitmap_seek_bits(bits, numbytes, 0, numbits, sync_pattern);
     if(off == BITMAP_SEEK_NOT_FOUND) return false;
@@ -121,6 +121,10 @@ static bool decode(uint8_t* bits, uint32_t numbytes, uint32_t numbits, ProtoView
     uint32_t datalen = j + 3; // If the terminator was found at j, then
         // we need to sum three more bytes to have
         // the len: FF itself, AA, checksum.
+    if(datalen > sizeof(raw)) {
+        FURI_LOG_E(TAG, "Chat: message too long");
+        return false;
+    }
     info->pulses_count = sync_len + 8 * 3 * datalen;
 
     // Check if the control sum matches.
@@ -131,7 +135,7 @@ static bool decode(uint8_t* bits, uint32_t numbytes, uint32_t numbits, ProtoView
 
     // Check if the length of the sender looks sane
     uint8_t senderlen = raw[0];
-    if(senderlen >= sizeof(raw)) {
+    if(senderlen >= sizeof(raw) || (uint32_t)senderlen + 4 > datalen) {
         FURI_LOG_E(TAG, "Chat: invalid sender length");
         return false; // Overflow
     }
