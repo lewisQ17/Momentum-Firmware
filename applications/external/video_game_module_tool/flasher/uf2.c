@@ -145,12 +145,27 @@ bool uf2_get_block_count(File* file, uint32_t* block_count) {
     return true;
 }
 
-bool uf2_verify_block(File* file, uint32_t family_id, size_t payload_size) {
+bool uf2_verify_block(
+    File* file,
+    uint32_t family_id,
+    size_t payload_size,
+    uint32_t block_no,
+    uint32_t target_addr) {
     Uf2BlockHeader header;
     Uf2BlockTrailer trailer;
 
     if(!uf2_block_header_read(&header, file)) return false;
     if(!uf2_block_header_verify(&header, family_id, payload_size)) return false;
+    // blocks are written back to back, so they must be in order and without gaps
+    if(header.block_no != block_no || header.target_addr != target_addr) {
+        FURI_LOG_E(
+            TAG,
+            "Block #%lu is out of order or not contiguous (expected #%lu at 0x%lX)",
+            header.block_no,
+            block_no,
+            target_addr);
+        return false;
+    }
     if(!uf2_block_payload_skip(file)) return false;
     if(!uf2_block_trailer_read(&trailer, file)) return false;
     if(!uf2_block_trailer_verify(&trailer)) return false;

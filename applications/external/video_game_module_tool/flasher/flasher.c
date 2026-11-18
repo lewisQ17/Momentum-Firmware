@@ -11,6 +11,7 @@
 
 #define TAG "VgmFlasher"
 
+#define RP2040_FLASH_BASE   (0x10000000UL) // XIP address of the external flash in UF2 files
 #define W25Q128_CAPACITY    (0x1000000UL)
 #define W25Q128_PAGE_SIZE   (0x100UL)
 #define W25Q128_SECTOR_SIZE (0x1000UL)
@@ -154,7 +155,13 @@ static bool flasher_verify_file(File* file, size_t* data_size) {
         uint8_t prev_progress = UINT8_MAX;
 
         for(blocks_verified = 0; blocks_verified < block_count; ++blocks_verified) {
-            if(!uf2_verify_block(file, RP2040_FAMILY_ID, W25Q128_PAGE_SIZE)) break;
+            if(!uf2_verify_block(
+                   file,
+                   RP2040_FAMILY_ID,
+                   W25Q128_PAGE_SIZE,
+                   blocks_verified,
+                   RP2040_FLASH_BASE + blocks_verified * W25Q128_PAGE_SIZE))
+                break;
 
             const uint8_t verify_progress = (blocks_verified * 100UL) / block_count;
             if(verify_progress != prev_progress) {

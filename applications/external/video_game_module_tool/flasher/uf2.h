@@ -40,14 +40,22 @@ bool uf2_get_block_count(File* file, uint32_t* block_count);
  *
  * Will fail if:
  * - the family id flag is set, but does not match the provided value,
- * - payload size does not match the provided value.
+ * - payload size does not match the provided value,
+ * - block number or target address do not match the provided values.
  *
  * @param[in] file pointer to the storage file instance.
  * @param[in] family_id family identifier to check against the respective header field.
  * @param[in] payload_size payload size to check agains the respective header field, in bytes.
+ * @param[in] block_no block number the block must have.
+ * @param[in] target_addr target address the block must have.
  * @returns true on success, false otherwise.
  */
-bool uf2_verify_block(File* file, uint32_t family_id, size_t payload_size);
+bool uf2_verify_block(
+    File* file,
+    uint32_t family_id,
+    size_t payload_size,
+    uint32_t block_no,
+    uint32_t target_addr);
 
 /**
  * @brief Read the payload from a single UF2 block.
