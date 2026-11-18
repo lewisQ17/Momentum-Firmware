@@ -1448,9 +1448,11 @@ int32_t tanks_game_app(void* p) {
 
     if(subghz_tx_rx_worker_is_running(subghz_txrx)) {
         subghz_tx_rx_worker_stop(subghz_txrx);
-        subghz_tx_rx_worker_free(subghz_txrx);
     }
+    subghz_tx_rx_worker_free(subghz_txrx);
 
+    // switches the external module's 5V (OTG) off again and ends the device
+    radio_device_loader_end(subghz_device);
     subghz_devices_deinit();
 
     furi_timer_free(timer);
