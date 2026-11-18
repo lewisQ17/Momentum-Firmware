@@ -195,9 +195,9 @@ static void draw_callback(Canvas* canvas, void* ctx) {
     if(player == 2) {
         canvas_draw_str(canvas, 80, 10, "Turn: O");
     }
-    char scX[1];
+    char scX[12];
     intToStr(scoreX, scX);
-    char scO[1];
+    char scO[12];
     intToStr(scoreO, scO);
 
     canvas_draw_str(canvas, 80, 20, "X:");
