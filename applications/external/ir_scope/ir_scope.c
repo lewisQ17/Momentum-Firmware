@@ -21,7 +21,11 @@ typedef struct {
 } IRScopeState;
 
 static void state_set_autoscale(IRScopeState* state) {
-    if(state->autoscale) state->us_per_sample = state->timings_sum / (ROWS * COLS);
+    if(state->autoscale) {
+        // never 0 (short signals): render_callback divides by it. Never wrap the 16 bit field either.
+        uint32_t us = state->timings_sum / (ROWS * COLS);
+        state->us_per_sample = (uint16_t)MIN(MAX(us, 1U), (uint32_t)UINT16_MAX);
+    }
 }
 
 static void canvas_draw_str_outline(Canvas* canvas, int x, int y, const char* str) {
@@ -52,7 +56,7 @@ static void render_callback(Canvas* canvas, void* ctx) {
             done = ix >= state->timings_cnt;
 
             if(!done && timing_cols < 0) {
-                timing_cols = state->timings[ix] / state->us_per_sample;
+                timing_cols = state->timings[ix] / MAX(state->us_per_sample, (uint16_t)1);
                 on = !on;
             }
 
@@ -116,6 +120,7 @@ int32_t ir_scope_app(void* p) {
 
     if(furi_hal_infrared_is_busy()) {
         FURI_LOG_E(TAG, "Infrared is busy.");
+        furi_message_queue_free(event_queue);
         return -1;
     }
 
@@ -124,6 +129,7 @@ int32_t ir_scope_app(void* p) {
     state.mutex = furi_mutex_alloc(FuriMutexTypeNormal);
     if(!state.mutex) {
         FURI_LOG_E(TAG, "Cannot create mutex.");
+        furi_message_queue_free(event_queue);
         return -1;
     }
 
