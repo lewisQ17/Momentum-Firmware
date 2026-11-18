@@ -119,6 +119,8 @@ void momentum_app_scene_interface_graphics_on_enter(void* context) {
     VariableItem* item;
     uint8_t value_index;
 
+    momentum_app_load_asset_pack_names(app);
+
     item = variable_item_list_add(
         var_item_list,
         "Asset Pack",

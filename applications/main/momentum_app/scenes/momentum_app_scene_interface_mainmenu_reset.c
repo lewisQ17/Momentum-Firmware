@@ -32,9 +32,10 @@ bool momentum_app_scene_interface_mainmenu_reset_on_event(void* context, SceneMa
         switch(event.event) {
         case DialogExResultRight:
             storage_common_remove(app->storage, MAINMENU_APPS_PATH);
-            momentum_app_empty_mainmenu_apps(app);
+            // Unload (not just empty) so the loaded flag is cleared and the
+            // defaults are really rebuilt by the load below.
+            momentum_app_unload_mainmenu_apps(app);
             momentum_app_load_mainmenu_apps(app);
-            app->mainmenu_app_index = 0;
             app->save_mainmenu_apps = false;
             /* fall through */
         case DialogExResultLeft:

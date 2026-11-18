@@ -28,7 +28,8 @@ bool momentum_app_bytes_any_set(const uint8_t* data, size_t size) {
 }
 
 bool momentum_app_apply(MomentumApp* app) {
-    if(app->save_mainmenu_apps) {
+    // Lists are lazy-loaded: never write one back that was not loaded this session.
+    if(app->save_mainmenu_apps && app->mainmenu_apps_loaded) {
         Stream* stream = file_stream_alloc(app->storage);
         if(file_stream_open(stream, MAINMENU_APPS_PATH, FSAM_READ_WRITE, FSOM_CREATE_ALWAYS)) {
             stream_write_format(stream, "MenuAppList Version %u\n", 1);
@@ -44,7 +45,7 @@ bool momentum_app_apply(MomentumApp* app) {
         desktop_api_set_settings(app->desktop, &app->desktop_settings);
     }
 
-    if(app->save_subghz_freqs) {
+    if(app->save_subghz_freqs && app->subghz_freqs_loaded) {
         FlipperFormat* file = flipper_format_file_alloc(app->storage);
         do {
             FrequencyList_it_t it;
@@ -262,7 +263,57 @@ void momentum_app_push_mainmenu_app(MomentumApp* app, FuriString* exe) {
     furi_string_free(label);
 }
 
+void momentum_app_load_asset_pack_names(MomentumApp* app) {
+    if(app->asset_pack_names_loaded) {
+        return;
+    }
+
+    app->asset_pack_index = 0;
+    File* folder = storage_file_alloc(app->storage);
+    FileInfo info;
+    char* name = malloc(ASSET_PACKS_NAME_LEN);
+    if(storage_dir_open(folder, ASSET_PACKS_PATH)) {
+        while(storage_dir_read(folder, &info, name, ASSET_PACKS_NAME_LEN)) {
+            if(info.flags & FSF_DIRECTORY && name[0] != '.') {
+                char* copy = strdup(name);
+                size_t idx = 0;
+                for(; idx < CharList_size(app->asset_pack_names); idx++) {
+                    char* comp = *CharList_get(app->asset_pack_names, idx);
+                    if(strcasecmp(copy, comp) < 0) {
+                        break;
+                    }
+                }
+                CharList_push_at(app->asset_pack_names, idx, copy);
+                if(app->asset_pack_index != 0) {
+                    if(idx < app->asset_pack_index) app->asset_pack_index++;
+                } else {
+                    if(strcmp(copy, momentum_settings.asset_pack) == 0)
+                        app->asset_pack_index = idx + 1;
+                }
+            }
+        }
+    }
+    free(name);
+    storage_file_free(folder);
+
+    app->asset_pack_names_loaded = true;
+}
+
+void momentum_app_unload_asset_pack_names(MomentumApp* app) {
+    CharList_it_t it;
+    for(CharList_it(it, app->asset_pack_names); !CharList_end_p(it); CharList_next(it)) {
+        free(*CharList_cref(it));
+    }
+    CharList_reset(app->asset_pack_names);
+    app->asset_pack_index = 0;
+    app->asset_pack_names_loaded = false;
+}
+
 void momentum_app_load_mainmenu_apps(MomentumApp* app) {
+    if(app->mainmenu_apps_loaded) {
+        return;
+    }
+
     // Loading logic mimics applications/services/loader/loader_menu.c
     Stream* stream = file_stream_alloc(app->storage);
     FuriString* line = furi_string_alloc();
@@ -304,6 +355,7 @@ void momentum_app_load_mainmenu_apps(MomentumApp* app) {
     furi_string_free(line);
     file_stream_close(stream);
     stream_free(stream);
+    app->mainmenu_apps_loaded = true;
 }
 
 void momentum_app_empty_mainmenu_apps(MomentumApp* app) {
@@ -316,6 +368,44 @@ void momentum_app_empty_mainmenu_apps(MomentumApp* app) {
         free(*CharList_cref(it));
     }
     CharList_reset(app->mainmenu_app_exes);
+}
+
+void momentum_app_unload_mainmenu_apps(MomentumApp* app) {
+    momentum_app_empty_mainmenu_apps(app);
+    app->mainmenu_app_index = 0;
+    app->mainmenu_apps_loaded = false;
+}
+
+void momentum_app_load_subghz_freqs(MomentumApp* app) {
+    if(app->subghz_freqs_loaded) {
+        return;
+    }
+
+    FlipperFormat* file = flipper_format_file_alloc(app->storage);
+    app->subghz_use_defaults = true;
+    do {
+        uint32_t temp;
+        if(!flipper_format_file_open_existing(file, EXT_PATH("subghz/assets/setting_user"))) break;
+
+        flipper_format_read_bool(file, "Add_standard_frequencies", &app->subghz_use_defaults, 1);
+
+        if(!flipper_format_rewind(file)) break;
+        while(flipper_format_read_uint32(file, "Frequency", &temp, 1)) {
+            if(furi_hal_subghz_is_frequency_valid(temp)) {
+                FrequencyList_push_back(app->subghz_static_freqs, temp);
+            }
+        }
+
+        if(!flipper_format_rewind(file)) break;
+        while(flipper_format_read_uint32(file, "Hopper_frequency", &temp, 1)) {
+            if(furi_hal_subghz_is_frequency_valid(temp)) {
+                FrequencyList_push_back(app->subghz_hopper_freqs, temp);
+            }
+        }
+    } while(false);
+    flipper_format_free(file);
+
+    app->subghz_freqs_loaded = true;
 }
 
 MomentumApp* momentum_app_alloc() {
@@ -380,68 +470,26 @@ MomentumApp* momentum_app_alloc() {
 
     // Settings init
 
+    // Asset pack names, main menu apps and Sub-GHz frequency lists are lazy:
+    // the scenes that show them call momentum_app_load_*() on enter, so opening
+    // the app does not scan the SD card or parse FAP manifests up front.
     app->asset_pack_index = 0;
+    app->asset_pack_names_loaded = false;
     CharList_init(app->asset_pack_names);
-    File* folder = storage_file_alloc(app->storage);
-    FileInfo info;
-    char* name = malloc(ASSET_PACKS_NAME_LEN);
-    if(storage_dir_open(folder, ASSET_PACKS_PATH)) {
-        while(storage_dir_read(folder, &info, name, ASSET_PACKS_NAME_LEN)) {
-            if(info.flags & FSF_DIRECTORY && name[0] != '.') {
-                char* copy = strdup(name);
-                size_t idx = 0;
-                for(; idx < CharList_size(app->asset_pack_names); idx++) {
-                    char* comp = *CharList_get(app->asset_pack_names, idx);
-                    if(strcasecmp(copy, comp) < 0) {
-                        break;
-                    }
-                }
-                CharList_push_at(app->asset_pack_names, idx, copy);
-                if(app->asset_pack_index != 0) {
-                    if(idx < app->asset_pack_index) app->asset_pack_index++;
-                } else {
-                    if(strcmp(copy, momentum_settings.asset_pack) == 0)
-                        app->asset_pack_index = idx + 1;
-                }
-            }
-        }
-    }
-    free(name);
-    storage_file_free(folder);
 
+    app->mainmenu_app_index = 0;
+    app->mainmenu_apps_loaded = false;
     CharList_init(app->mainmenu_app_labels);
     CharList_init(app->mainmenu_app_exes);
-    momentum_app_load_mainmenu_apps(app);
 
     desktop_api_get_settings(app->desktop, &app->desktop_settings);
 
-    FlipperFormat* file = flipper_format_file_alloc(app->storage);
+    app->subghz_use_defaults = true;
+    app->subghz_freqs_loaded = false;
     FrequencyList_init(app->subghz_static_freqs);
     FrequencyList_init(app->subghz_hopper_freqs);
-    app->subghz_use_defaults = true;
-    do {
-        uint32_t temp;
-        if(!flipper_format_file_open_existing(file, EXT_PATH("subghz/assets/setting_user"))) break;
 
-        flipper_format_read_bool(file, "Add_standard_frequencies", &app->subghz_use_defaults, 1);
-
-        if(!flipper_format_rewind(file)) break;
-        while(flipper_format_read_uint32(file, "Frequency", &temp, 1)) {
-            if(furi_hal_subghz_is_frequency_valid(temp)) {
-                FrequencyList_push_back(app->subghz_static_freqs, temp);
-            }
-        }
-
-        if(!flipper_format_rewind(file)) break;
-        while(flipper_format_read_uint32(file, "Hopper_frequency", &temp, 1)) {
-            if(furi_hal_subghz_is_frequency_valid(temp)) {
-                FrequencyList_push_back(app->subghz_hopper_freqs, temp);
-            }
-        }
-    } while(false);
-    flipper_format_free(file);
-
-    file = flipper_format_file_alloc(app->storage);
+    FlipperFormat* file = flipper_format_file_alloc(app->storage);
     if(flipper_format_file_open_existing(file, "/ext/subghz/assets/extend_range.txt")) {
         flipper_format_read_bool(file, "use_ext_range_at_own_risk", &app->subghz_extend, 1);
         flipper_format_read_bool(file, "ignore_default_tx_region", &app->subghz_bypass, 1);
@@ -546,13 +594,10 @@ void momentum_app_free(MomentumApp* app) {
 
     // Settings deinit
 
-    CharList_it_t it;
-    for(CharList_it(it, app->asset_pack_names); !CharList_end_p(it); CharList_next(it)) {
-        free(*CharList_cref(it));
-    }
+    momentum_app_unload_asset_pack_names(app);
     CharList_clear(app->asset_pack_names);
 
-    momentum_app_empty_mainmenu_apps(app);
+    momentum_app_unload_mainmenu_apps(app);
     CharList_clear(app->mainmenu_app_labels);
     CharList_clear(app->mainmenu_app_exes);
 

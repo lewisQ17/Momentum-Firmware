@@ -68,15 +68,18 @@ typedef struct {
 
     CharList_t asset_pack_names;
     uint8_t asset_pack_index;
+    bool asset_pack_names_loaded;
     CharList_t mainmenu_app_labels;
     CharList_t mainmenu_app_exes;
     uint8_t mainmenu_app_index;
+    bool mainmenu_apps_loaded;
     DesktopSettings desktop_settings;
     bool subghz_use_defaults;
     FrequencyList_t subghz_static_freqs;
     uint8_t subghz_static_index;
     FrequencyList_t subghz_hopper_freqs;
     uint8_t subghz_hopper_index;
+    bool subghz_freqs_loaded;
     bool subghz_extend;
     bool subghz_bypass;
     RgbColor lcd_color;
@@ -125,6 +128,15 @@ bool momentum_app_apply(MomentumApp* app);
 // True if any byte is non-zero (all-zero = the "real / not set" spoof sentinel).
 bool momentum_app_bytes_any_set(const uint8_t* data, size_t size);
 
+// Lazy lists: every load is a no-op once loaded, so each scene that reads a list
+// calls its loader on enter. Everything is released in momentum_app_free().
+void momentum_app_load_asset_pack_names(MomentumApp* app);
+void momentum_app_unload_asset_pack_names(MomentumApp* app);
+
 void momentum_app_push_mainmenu_app(MomentumApp* app, FuriString* exe);
 void momentum_app_load_mainmenu_apps(MomentumApp* app);
 void momentum_app_empty_mainmenu_apps(MomentumApp* app);
+// Empties the list and clears the loaded flag, so the next load re-reads the file.
+void momentum_app_unload_mainmenu_apps(MomentumApp* app);
+
+void momentum_app_load_subghz_freqs(MomentumApp* app);

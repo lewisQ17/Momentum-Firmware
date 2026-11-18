@@ -24,6 +24,8 @@ void momentum_app_scene_protocols_freqs_on_enter(void* context) {
     VariableItemList* var_item_list = app->var_item_list;
     VariableItem* item;
 
+    momentum_app_load_subghz_freqs(app);
+
     item = variable_item_list_add(
         var_item_list,
         "Use Defaults",

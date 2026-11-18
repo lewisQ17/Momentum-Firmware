@@ -29,6 +29,8 @@ void momentum_app_scene_protocols_freqs_add_on_enter(void* context) {
     MomentumApp* app = context;
     NumberInput* number_input = app->number_input;
 
+    momentum_app_load_subghz_freqs(app);
+
     number_input_set_header_text(number_input, "Use kHz values, like 433920");
 
     number_input_set_result_callback(

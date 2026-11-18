@@ -18,6 +18,8 @@ void momentum_app_scene_interface_mainmenu_add_main_on_enter(void* context) {
     MomentumApp* app = context;
     Submenu* submenu = app->submenu;
 
+    momentum_app_load_mainmenu_apps(app);
+
     for(size_t i = 0; i < FLIPPER_APPS_COUNT; i++) {
         submenu_add_item(
             submenu,
