@@ -271,8 +271,7 @@ static void usb_uart_update_framing(UsbUartBridge* usb_uart) {
             furi_hal_cdc_get_port_settings(usb_uart->cfg.vcp_ch);
         // Unsupported or not yet set by the host: keep the current framing
         if(!usb_uart_framing_from_host(line_cfg, &data_bits, &parity, &stop_bits)) return;
-        if(!usb_uart_framing_is_valid(usb_uart->cfg.uart_ch, data_bits, parity, stop_bits))
-            return;
+        if(!usb_uart_framing_is_valid(usb_uart->cfg.uart_ch, data_bits, parity, stop_bits)) return;
     } else {
         data_bits = usb_uart->cfg.data_bits;
         parity = usb_uart->cfg.parity;
@@ -344,6 +343,13 @@ static int32_t usb_uart_worker(void* context) {
         furi_hal_gpio_init_simple(
             flow_pins[usb_uart->cfg.flow_pins - 1][1], GpioModeOutputPushPull);
         usb_uart_update_ctrl_lines(usb_uart);
+    }
+    // A start-up config can now come from saved settings, so the DE/RE pin has to
+    // be set up here too and not only when the option changes while running
+    if(usb_uart->cfg.software_de_re != 0) {
+        furi_hal_gpio_write(USB_USART_DE_RE_PIN, true);
+        furi_hal_gpio_init(
+            USB_USART_DE_RE_PIN, GpioModeOutputPushPull, GpioPullNo, GpioSpeedMedium);
     }
 
     furi_thread_flags_set(furi_thread_get_id(usb_uart->tx_thread), WorkerEvtCdcRx);

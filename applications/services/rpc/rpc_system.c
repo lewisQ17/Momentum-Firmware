@@ -169,6 +169,17 @@ static void rpc_system_system_set_datetime_process(const PB_Main* request, void*
     datetime.month = request->content.system_set_datetime_request.datetime.month;
     datetime.year = request->content.system_set_datetime_request.datetime.year;
     datetime.weekday = request->content.system_set_datetime_request.datetime.weekday;
+    // Clients that leave the weekday unset send 0; derive it rather than refusing
+    // the whole time sync (1 = Monday ... 7 = Sunday)
+    if((datetime.weekday == 0 || datetime.weekday > 7) && datetime.month >= 1 &&
+       datetime.month <= 12) {
+        static const uint8_t month_offset[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+        uint16_t year = datetime.year - (datetime.month < 3 ? 1 : 0);
+        uint8_t day_of_week = (year + year / 4 - year / 100 + year / 400 +
+                               month_offset[datetime.month - 1] + datetime.day) %
+                              7;
+        datetime.weekday = day_of_week == 0 ? 7 : day_of_week;
+    }
     // Remote-supplied: an out of range month/day would later break timestamp math
     if(!datetime_validate_datetime(&datetime)) {
         rpc_send_and_release_empty(
