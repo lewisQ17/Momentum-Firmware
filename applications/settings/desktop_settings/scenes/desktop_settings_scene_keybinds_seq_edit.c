@@ -86,6 +86,38 @@ static void desktop_settings_scene_keybinds_seq_edit_build(DesktopSettingsApp* a
     furi_string_free(keys_str);
 }
 
+// Sequences are layered on top of the single-key keybinds: every press still
+// runs its own Press keybind, which opens a menu or an app and takes the keys
+// away from the desktop. Tell the user when that keeps this sequence from ever
+// completing (the last key is fine, a completed sequence replaces its keybind).
+static void desktop_settings_scene_keybinds_seq_edit_warn(DesktopSettingsApp* app) {
+    for(uint8_t i = 0; i + 1 < app->seq_edit_len; i++) {
+        const uint8_t key = app->seq_edit_keys[i];
+        if(key >= DesktopKeybindKeyMAX) continue;
+        if(furi_string_equal(app->keybinds[DesktopKeybindTypePress][key], "_")) continue;
+
+        DesktopKeybindSequence tmp;
+        memset(&tmp, 0, sizeof(tmp));
+        tmp.length = 1;
+        tmp.keys[0] = key;
+        FuriString* key_str = furi_string_alloc();
+        desktop_keybind_sequence_keys_str(&tmp, key_str);
+        FuriString* text = furi_string_alloc_printf(
+            "Press %s runs its own\nkeybind first. Remove it\nfor this sequence to work.",
+            furi_string_get_cstr(key_str));
+        furi_string_free(key_str);
+        DialogMessage* message = dialog_message_alloc();
+        dialog_message_set_header(message, "Keybind conflict", 64, 0, AlignCenter, AlignTop);
+        dialog_message_set_text(
+            message, furi_string_get_cstr(text), 64, 14, AlignCenter, AlignTop);
+        dialog_message_set_buttons(message, NULL, "OK", NULL);
+        dialog_message_show(app->dialogs, message);
+        dialog_message_free(message);
+        furi_string_free(text);
+        return;
+    }
+}
+
 void desktop_settings_scene_keybinds_seq_edit_on_enter(void* context) {
     DesktopSettingsApp* app = context;
     desktop_settings_scene_keybinds_seq_edit_build(app);
@@ -123,6 +155,7 @@ bool desktop_settings_scene_keybinds_seq_edit_on_event(void* context, SceneManag
         case SeqEditItemSetAction:
             // A sequence needs at least two keys to differ from a single-key keybind.
             if(app->seq_edit_len >= 2) {
+                desktop_settings_scene_keybinds_seq_edit_warn(app);
                 app->editing_sequence = true;
                 scene_manager_set_scene_state(
                     app->scene_manager,

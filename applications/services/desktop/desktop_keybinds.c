@@ -95,25 +95,26 @@ const char* const desktop_keybind_keys[DesktopKeybindKeyMAX] = {
     [DesktopKeybindKeyLeft] = "Left",
 };
 
-static FuriString*
-    desktop_keybinds_load_one(Desktop* desktop, DesktopKeybindType type, DesktopKeybindKey key) {
+// Reads one single-key keybind from an already opened keybinds file (NULL if the
+// file could not be opened), falling back to the default.
+static void desktop_keybinds_load_one(
+    FlipperFormat* file,
+    DesktopKeybindType type,
+    DesktopKeybindKey key,
+    FuriString* keybind) {
     bool success = false;
-    FuriString* keybind = furi_string_alloc();
-    FlipperFormat* file = flipper_format_file_alloc(desktop->storage);
 
-    if(flipper_format_file_open_existing(file, DESKTOP_KEYBINDS_PATH)) {
+    if(file && flipper_format_rewind(file)) {
         FuriString* keybind_name = furi_string_alloc_printf(
             "%s%s", desktop_keybind_types[type], desktop_keybind_keys[key]);
         success = flipper_format_read_string(file, furi_string_get_cstr(keybind_name), keybind);
         furi_string_free(keybind_name);
     }
 
-    flipper_format_free(file);
     if(!success) {
         FURI_LOG_W(TAG, "Failed to load file, using defaults");
         furi_string_set(keybind, desktop_keybinds_defaults[type][key]);
     }
-    return keybind;
 }
 
 void desktop_keybinds_load(Desktop* desktop, DesktopKeybinds* keybinds) {
@@ -226,7 +227,7 @@ void desktop_keybinds_save_all(
     flipper_format_free(file);
 }
 
-void desktop_keybind_sequences_load(Desktop* desktop, DesktopKeybindSequences* sequences) {
+static void desktop_keybind_sequences_init(DesktopKeybindSequences* sequences) {
     for(size_t i = 0; i < DESKTOP_KEYBIND_SEQ_COUNT; i++) {
         DesktopKeybindSequence* s = &(*sequences)[i];
         s->length = 0;
@@ -237,35 +238,48 @@ void desktop_keybind_sequences_load(Desktop* desktop, DesktopKeybindSequences* s
             furi_string_reset(s->action);
         }
     }
+}
+
+// Reads the sequences from an already opened keybinds file that is positioned
+// right after its SeqCount key.
+static void desktop_keybind_sequences_read(
+    FlipperFormat* file,
+    uint32_t count,
+    DesktopKeybindSequences* sequences) {
+    if(count > DESKTOP_KEYBIND_SEQ_COUNT) count = DESKTOP_KEYBIND_SEQ_COUNT;
+    FuriString* name = furi_string_alloc();
+    FuriString* keys_val = furi_string_alloc();
+    for(uint32_t i = 0; i < count; i++) {
+        DesktopKeybindSequence* s = &(*sequences)[i];
+        furi_string_printf(name, "Seq%luKeys", (unsigned long)i);
+        if(!flipper_format_read_string(file, furi_string_get_cstr(name), keys_val)) {
+            continue;
+        }
+        uint8_t len = 0;
+        const char* cstr = furi_string_get_cstr(keys_val);
+        for(size_t k = 0; cstr[k] != '\0' && len < DESKTOP_KEYBIND_SEQ_MAX_LEN; k++) {
+            char c = cstr[k];
+            if(c < '0' || c > '3') continue;
+            s->keys[len++] = (uint8_t)(c - '0');
+        }
+        s->length = len;
+        furi_string_printf(name, "Seq%luAction", (unsigned long)i);
+        if(!flipper_format_read_string(file, furi_string_get_cstr(name), s->action)) {
+            furi_string_reset(s->action);
+        }
+    }
+    furi_string_free(name);
+    furi_string_free(keys_val);
+}
+
+void desktop_keybind_sequences_load(Desktop* desktop, DesktopKeybindSequences* sequences) {
+    desktop_keybind_sequences_init(sequences);
 
     FlipperFormat* file = flipper_format_file_alloc(desktop->storage);
     if(flipper_format_file_open_existing(file, DESKTOP_KEYBINDS_PATH)) {
         uint32_t count = 0;
         if(flipper_format_read_uint32(file, "SeqCount", &count, 1)) {
-            if(count > DESKTOP_KEYBIND_SEQ_COUNT) count = DESKTOP_KEYBIND_SEQ_COUNT;
-            FuriString* name = furi_string_alloc();
-            FuriString* keys_val = furi_string_alloc();
-            for(uint32_t i = 0; i < count; i++) {
-                DesktopKeybindSequence* s = &(*sequences)[i];
-                furi_string_printf(name, "Seq%luKeys", (unsigned long)i);
-                if(!flipper_format_read_string(file, furi_string_get_cstr(name), keys_val)) {
-                    continue;
-                }
-                uint8_t len = 0;
-                const char* cstr = furi_string_get_cstr(keys_val);
-                for(size_t k = 0; cstr[k] != '\0' && len < DESKTOP_KEYBIND_SEQ_MAX_LEN; k++) {
-                    char c = cstr[k];
-                    if(c < '0' || c > '3') continue;
-                    s->keys[len++] = (uint8_t)(c - '0');
-                }
-                s->length = len;
-                furi_string_printf(name, "Seq%luAction", (unsigned long)i);
-                if(!flipper_format_read_string(file, furi_string_get_cstr(name), s->action)) {
-                    furi_string_reset(s->action);
-                }
-            }
-            furi_string_free(name);
-            furi_string_free(keys_val);
+            desktop_keybind_sequences_read(file, count, sequences);
         }
     }
     flipper_format_free(file);
@@ -350,10 +364,13 @@ static void desktop_keybind_sequence_reset(void) {
     keybind_seq_history_len = 0;
 }
 
-// Append a direction key to the rolling history and fire the action of any
-// configured sequence whose keys match the tail of the history. Returns true
-// (and suppresses the single-key keybind) only when a sequence fires.
-static bool desktop_keybind_sequence_feed(Desktop* desktop, DesktopKeybindKey key) {
+// Append a direction key to the rolling history and look for a configured
+// sequence whose keys match the tail of the history. `file` is the already
+// opened keybinds file (NULL if it could not be opened). Returns true (which
+// suppresses the single-key keybind) and stores the action to run in `action`
+// only when a sequence matches.
+static bool
+    desktop_keybind_sequence_feed(FlipperFormat* file, DesktopKeybindKey key, FuriString* action) {
     uint32_t now = furi_get_tick();
     if(keybind_seq_history_len > 0 && (now - keybind_seq_last_tick) > KEYBIND_SEQ_TIMEOUT_MS) {
         keybind_seq_history_len = 0;
@@ -366,9 +383,16 @@ static bool desktop_keybind_sequence_feed(Desktop* desktop, DesktopKeybindKey ke
     }
     keybind_seq_history[keybind_seq_history_len++] = (uint8_t)key;
 
+    // Nothing to load or match when no sequence is configured
+    uint32_t count = 0;
+    if(!file || !flipper_format_read_uint32(file, "SeqCount", &count, 1) || count == 0) {
+        return false;
+    }
+
     DesktopKeybindSequences sequences;
     memset(sequences, 0, sizeof(sequences));
-    desktop_keybind_sequences_load(desktop, &sequences);
+    desktop_keybind_sequences_init(&sequences);
+    desktop_keybind_sequences_read(file, count, &sequences);
 
     bool matched = false;
     for(size_t i = 0; i < DESKTOP_KEYBIND_SEQ_COUNT && !matched; i++) {
@@ -383,7 +407,7 @@ static bool desktop_keybind_sequence_feed(Desktop* desktop, DesktopKeybindKey ke
             }
         }
         if(eq) {
-            desktop_keybind_dispatch(desktop, furi_string_get_cstr(s->action));
+            furi_string_set(action, s->action);
             matched = true;
         }
     }
@@ -401,18 +425,28 @@ void desktop_run_keybind(Desktop* desktop, InputType _type, InputKey _key) {
     DesktopKeybindType type = keybind_types[_type];
     DesktopKeybindKey key = keybind_keys[_key];
 
+    // One open of the keybinds file serves both the sequence check and the
+    // single-key lookup; it is closed again before the action is dispatched.
+    FuriString* keybind = furi_string_alloc();
+    FlipperFormat* file = flipper_format_file_alloc(desktop->storage);
+    FlipperFormat* opened_file =
+        flipper_format_file_open_existing(file, DESKTOP_KEYBINDS_PATH) ? file : NULL;
+
+    bool sequence_matched = false;
     if(_type == InputTypeShort) {
         // A matched multi-key sequence takes priority over the single-key keybind
         // for the final key; otherwise the single-key keybind runs as before.
-        if(desktop_keybind_sequence_feed(desktop, key)) {
-            return;
-        }
+        sequence_matched = desktop_keybind_sequence_feed(opened_file, key, keybind);
     } else {
         // A hold press breaks any in-progress sequence.
         desktop_keybind_sequence_reset();
     }
 
-    FuriString* keybind = desktop_keybinds_load_one(desktop, type, key);
+    if(!sequence_matched) {
+        desktop_keybinds_load_one(opened_file, type, key, keybind);
+    }
+    flipper_format_free(file);
+
     desktop_keybind_dispatch(desktop, furi_string_get_cstr(keybind));
     furi_string_free(keybind);
 }
