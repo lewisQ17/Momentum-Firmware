@@ -236,6 +236,7 @@ static void key_copier_view_load_callback(void* context) {
                 free(model->depth);
             }
             model->depth = malloc((model->format.pin_num + 1) * sizeof(uint8_t));
+            model->pin_slc = 1;
             for(uint8_t i = 0; i <= model->format.pin_num; i++) {
                 model->depth[i] = model->format.min_depth_ind;
             }
