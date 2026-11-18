@@ -215,7 +215,6 @@ static bool send_receive_command(
     size_t* rx_bits,
     bool send_seven_bits,
     bool send_with_crc) {
-    UNUSED(rx_buffer_size);
     st25r3916_direct_cmd(handle, ST25R3916_CMD_CLEAR_FIFO);
     st25r3916_get_irq(handle);
     if(send_seven_bits) {
@@ -238,6 +237,8 @@ static bool send_receive_command(
     size_t tmp_bits = 0;
     bool success = st25r3916_read_fifo(handle, tmp_buffer, sizeof(tmp_buffer), &tmp_bits);
     if(success && tmp_bits > 0) {
+        // never write more than the caller's buffer holds
+        if((tmp_bits + 7) / 8 > rx_buffer_size) return false;
         *rx_bits = tmp_bits;
         memcpy(rx_buffer, tmp_buffer, (tmp_bits + 7) / 8);
         log_rx_data(rx_buffer, tmp_bits);

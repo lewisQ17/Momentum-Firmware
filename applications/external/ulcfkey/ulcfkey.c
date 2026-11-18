@@ -224,7 +224,11 @@ static void log_rx_data(uint8_t* rx_buffer, size_t rx_bits) {
  * Send WUPA using the ST25R3916 built-in command for short frames.
  * This correctly transmits 0x52 (7 bits) and expects a 2-byte response (44 00).
  */
-static bool send_wupa(FuriHalSpiBusHandle* handle, uint8_t* rx_buffer, size_t* rx_bits) {
+static bool send_wupa(
+    FuriHalSpiBusHandle* handle,
+    uint8_t* rx_buffer,
+    size_t rx_buffer_size,
+    size_t* rx_bits) {
     // Clear FIFO & interrupts first
     st25r3916_direct_cmd(handle, ST25R3916_CMD_CLEAR_FIFO);
     st25r3916_get_irq(handle);
@@ -251,7 +255,7 @@ static bool send_wupa(FuriHalSpiBusHandle* handle, uint8_t* rx_buffer, size_t* r
     // TODO: Wait for TXE, RXS, RXE or a timeout
     furi_delay_ms(2);
 
-    bool success = st25r3916_read_fifo(handle, rx_buffer, 64, rx_bits);
+    bool success = st25r3916_read_fifo(handle, rx_buffer, rx_buffer_size, rx_bits);
     //log_rx_data(rx_buffer, *rx_bits);
 
     // Re-enable normal CRC for subsequent commands, if desired
@@ -348,10 +352,10 @@ static bool collect_auth1_challenge(FuriHalSpiBusHandle* handle, AppContext* app
     size_t rx_bits = 0;
 
     // 1) WUPA (7 bits) using built-in short frame
-    if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+    if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
         //FURI_LOG_E(TAG, "WUPA transmit failed");
         // Retry once
-        if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+        if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
             FURI_LOG_E(TAG, "WUPA retransmit failed");
             return false;
         }
@@ -479,10 +483,10 @@ static bool attempt_auth_with_nonce_collision(FuriHalSpiBusHandle* handle, AppCo
     size_t rx_bits = 0;
 
     // 1) WUPA (7 bits) using built-in short frame
-    if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+    if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
         //FURI_LOG_E(TAG, "WUPA transmit failed");
         // Retry once
-        if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+        if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
             FURI_LOG_E(TAG, "WUPA retransmit failed");
             return false;
         }
@@ -669,10 +673,10 @@ static bool overwrite_key_page(FuriHalSpiBusHandle* handle, AppContext* app, uin
     size_t rx_bits = 0;
 
     // 1) WUPA (7 bits) using built-in short frame
-    if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+    if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
         //FURI_LOG_E(TAG, "WUPA transmit failed");
         // Retry once
-        if(!send_wupa(handle, rx_buffer, &rx_bits)) {
+        if(!send_wupa(handle, rx_buffer, sizeof(rx_buffer), &rx_bits)) {
             FURI_LOG_E(TAG, "WUPA retransmit failed");
             return false;
         }
