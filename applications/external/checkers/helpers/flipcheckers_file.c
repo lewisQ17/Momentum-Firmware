@@ -37,7 +37,11 @@ bool flipcheckers_has_file(const FlipCheckersFile file_type, const char* file_na
     return ret;
 }
 
-bool flipcheckers_load_file(char* contents, const FlipCheckersFile file_type, const char* file_name) {
+bool flipcheckers_load_file(
+    char* contents,
+    size_t contents_size,
+    const FlipCheckersFile file_type,
+    const char* file_name) {
     bool ret = false;
     const char* path;
     char path_buf[FILE_MAX_PATH_LEN] = {0};
@@ -55,14 +59,18 @@ bool flipcheckers_load_file(char* contents, const FlipCheckersFile file_type, co
     File* settings_file = storage_file_alloc(fs_api);
     if(storage_file_open(settings_file, path, FSAM_READ, FSOM_OPEN_EXISTING)) {
         char chr;
-        int i = 0;
+        size_t i = 0;
+        // never write more than the caller's buffer holds, and keep room for the terminator
+        const size_t max_chars = contents_size - 1 < FILE_MAX_CHARS ? contents_size - 1 :
+                                                                       FILE_MAX_CHARS;
         while((storage_file_read(settings_file, &chr, 1) == 1) &&
               !storage_file_eof(settings_file)) {
-            if(i < FILE_MAX_CHARS) {
+            if(i < max_chars) {
                 contents[i] = chr;
             }
             i++;
         }
+        contents[i < max_chars ? i : max_chars] = '\0';
         ret = true;
     } else {
         contents[0] = '\0';

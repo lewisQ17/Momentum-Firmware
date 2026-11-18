@@ -14,7 +14,11 @@ void flipcheckers_scene_startscreen_on_enter(void* context) {
     FlipCheckers* app = context;
 
     if(flipcheckers_has_file(FlipCheckersFileBoard, NULL, false)) {
-        if(flipcheckers_load_file(app->import_game_text, FlipCheckersFileBoard, NULL)) {
+        if(flipcheckers_load_file(
+               app->import_game_text,
+               sizeof(app->import_game_text),
+               FlipCheckersFileBoard,
+               NULL)) {
             app->import_game = 1;
         }
     }
