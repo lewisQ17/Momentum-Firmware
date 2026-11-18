@@ -57,11 +57,12 @@ static bool itso_parse(const NfcDevice* device, FuriString* parsed_data) {
         uint64_t x1 = swap_uint64(itso_file->part1);
         uint64_t x2 = swap_uint64(itso_file->part2);
 
-        char cardBuff[32];
-        char dateBuff[18];
+        char cardBuff[33] = {0};
+        char dateBuff[18] = {0};
 
-        snprintf(cardBuff, sizeof(cardBuff), "%llx%llx", x1, x2);
-        snprintf(dateBuff, sizeof(dateBuff), "%llx", x2);
+        // Fixed offsets are used below, so keep the leading zero nibbles
+        snprintf(cardBuff, sizeof(cardBuff), "%016llx%016llx", x1, x2);
+        snprintf(dateBuff, sizeof(dateBuff), "%016llx", x2);
 
         char* cardp = cardBuff + 4;
         cardp[18] = '\0';

@@ -165,14 +165,14 @@ static bool ndef_get(Ndef* ndef, size_t pos, size_t len, void* buf) {
 #if NDEF_PROTO == NDEF_PROTO_RAW
 
     // Using user-provided pointer, simply need to remap to it
-    if(pos + len > ndef->raw.size) return false;
+    if(pos > ndef->raw.size || len > ndef->raw.size - pos) return false;
     memcpy(buf, ndef->raw.data + pos, len);
     return true;
 
 #elif NDEF_PROTO == NDEF_PROTO_UL
 
     // Memory space is contiguous, simply need to remap to data pointer
-    if(pos + len > ndef->ul.size) return false;
+    if(pos > ndef->ul.size || len > ndef->ul.size - pos) return false;
     memcpy(buf, ndef->ul.start + pos, len);
     return true;
 
@@ -182,7 +182,7 @@ static bool ndef_get(Ndef* ndef, size_t pos, size_t len, void* buf) {
     // a position offset in data space, as if it were contiguous.
 
     // Start with a simple data space size check
-    if(pos + len > ndef->mfc.size) return false;
+    if(pos > ndef->mfc.size || len > ndef->mfc.size - pos) return false;
 
     // First 128 blocks are 32 sectors: 3 data blocks, 1 sector trailer.
     // Sector 16 contains MAD2 and we need to skip this.
@@ -233,14 +233,14 @@ static bool ndef_get(Ndef* ndef, size_t pos, size_t len, void* buf) {
 #elif NDEF_PROTO == NDEF_PROTO_SLIX
 
     // Memory space is contiguous, simply need to remap to data pointer
-    if(pos + len > ndef->slix.size) return false;
+    if(pos > ndef->slix.size || len > ndef->slix.size - pos) return false;
     memcpy(buf, ndef->slix.start + pos, len);
     return true;
 
 #elif NDEF_PROTO == NDEF_PROTO_T4T
 
     // Memory space is contiguous, simply need to remap to data pointer
-    if(pos + len > ndef->t4t.size) return false;
+    if(pos > ndef->t4t.size || len > ndef->t4t.size - pos) return false;
     memcpy(buf, ndef->t4t.data + pos, len);
     return true;
 
@@ -403,6 +403,8 @@ static bool ndef_parse_uri(Ndef* ndef, size_t pos, size_t len) {
 
 static bool ndef_parse_text(Ndef* ndef, size_t pos, size_t len) {
     furi_string_cat(ndef->output, "Text\n");
+    // Status byte and language code come first
+    if(len < 3) return false;
     if(!ndef_dump(ndef, NULL, pos + 3, len - 3, false)) return false;
     return true;
 }
@@ -723,6 +725,13 @@ bool ndef_parse_message(Ndef* ndef, size_t pos, size_t len, size_t message_num, 
 
         // Payload ID
         pos += id_len;
+
+        // Payload must fit in the message, its length is card-supplied and could
+        // otherwise wrap pos back to the start of this record (endless loop)
+        if(pos > end || payload_len > end - pos) {
+            if(type_was_allocated) free(type);
+            return false;
+        }
 
         if(smart_poster) {
             furi_string_cat_printf(ndef->output, "\e*> SP-R%zu: ", record_num);
