@@ -135,7 +135,7 @@ static void usb_uart_set_baudrate(UsbUartBridge* usb_uart, uint32_t baudrate) {
         struct usb_cdc_line_coding* line_cfg =
             furi_hal_cdc_get_port_settings(usb_uart->cfg.vcp_ch);
         if(line_cfg->dwDTERate > 0) {
-            furi_hal_serial_set_br(usb_uart->serial_handle, baudrate);
+            furi_hal_serial_set_br(usb_uart->serial_handle, line_cfg->dwDTERate);
             usb_uart->st.baudrate_cur = line_cfg->dwDTERate;
         }
     }
