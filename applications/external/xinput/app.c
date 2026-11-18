@@ -428,9 +428,23 @@ static usbd_respond hid_control(usbd_device* dev, usbd_ctlreq* req, usbd_rqc_cal
 	return usbd_fail;
 }
 
+extern FuriHalUsbInterface usb_xbox;
+
 static void hid_deinit(usbd_device* dev) {
 	usbd_reg_config(dev, NULL);
 	usbd_reg_control(dev, NULL);
+
+	free(usb_xbox.str_manuf_descr);
+	free(usb_xbox.str_prod_descr);
+	free(usb_xbox.str_serial_descr);
+	usb_xbox.str_manuf_descr = NULL;
+	usb_xbox.str_prod_descr = NULL;
+	usb_xbox.str_serial_descr = NULL;
+
+	if(hid_semaphore != NULL) {
+		furi_semaphore_free(hid_semaphore);
+		hid_semaphore = NULL;
+	}
 }
 static void hid_on_wakeup(usbd_device* dev) {
 	UNUSED(dev);
@@ -442,7 +456,7 @@ static void hid_on_suspend(usbd_device* dev) {
 	UNUSED(dev);
 	if(hid_connected) {
 		hid_connected = false;
-		furi_semaphore_release(hid_semaphore);
+		if(hid_semaphore != NULL) furi_semaphore_release(hid_semaphore);
 	}
 }
 
@@ -501,8 +515,6 @@ static void hid_init(usbd_device* dev, FuriHalUsbInterface* intf, void* ctx) {
 	usbd_reg_control(dev, hid_control);
 	usbd_connect(dev, true);
 }
-
-char* message;
 
 static void app_draw_callback(Canvas* canvas, void* ctx) {
 	UNUSED(ctx);
@@ -570,7 +582,7 @@ static void app_input_callback(InputEvent* input_event, void* ctx) {
 	furi_assert(ctx);
 
 	FuriMessageQueue* event_queue = ctx;
-	furi_message_queue_put(event_queue, input_event, FuriWaitForever);
+	furi_message_queue_put(event_queue, input_event, 0);
 }
 
 int32_t xinput_app(void* p) {
@@ -591,15 +603,21 @@ int32_t xinput_app(void* p) {
     FuriHalUsbInterface* usb_mode_prev = furi_hal_usb_get_config();
     furi_hal_usb_unlock();
 	furi_check(furi_hal_usb_set_config(&usb_xbox, NULL));
+	bool last_connected = hid_connected;
 	while (true) {
-        while (!hid_connected) {
-            view_port_update(view_port);
-        }
-		furi_check(furi_message_queue_get(event_queue, &input_event, FuriWaitForever) == FuriStatusOk);
+		// keep servicing input while the host is not connected so Back can still exit
+		if (hid_connected != last_connected) {
+			last_connected = hid_connected;
+			view_port_update(view_port);
+		}
+		FuriStatus queue_status = furi_message_queue_get(event_queue, &input_event, 50);
+		if (queue_status == FuriStatusErrorTimeout) {
+			continue;
+		}
+		furi_check(queue_status == FuriStatusOk);
 		if (!running) {
 			break;
 		}
-		message = strdup(input_get_type_name(input_event.type));
         if (input_event.type == InputTypeLong && input_event.key == InputKeyBack && current_surface.buttons == B) {
             running = false;
         }
