@@ -230,6 +230,86 @@ void run_with_default_app(const char* path) {
     ArchiveFile_t_clear(&item);
 }
 
+// Paste the pending clipboard (one path, or a whole multi-selection) into the
+// folder that is currently open. Every entry goes through the same
+// copy/move + auto-rename helper as before; a failing entry does not stop the
+// rest, the outcome is reported once at the end.
+static void archive_scene_browser_paste(ArchiveApp* archive) {
+    ArchiveBrowserView* browser = archive->browser;
+
+    size_t count = 0;
+    bool copy = false;
+    FuriString** items = archive_clipboard_take(browser, &count, &copy);
+    if(items == NULL) {
+        return;
+    }
+
+    view_dispatcher_switch_to_view(archive->view_dispatcher, ArchiveViewStack);
+    archive_show_loading_popup(archive, true);
+
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    FuriString* dir_dst = furi_string_alloc_set(browser->path);
+    FuriString* path_dst = furi_string_alloc();
+    FuriString* path_done = furi_string_alloc();
+    FuriString* base = furi_string_alloc();
+    size_t done = 0;
+    const char* fail_desc = NULL;
+
+    for(size_t i = 0; i < count; i++) {
+        const char* path_src = furi_string_get_cstr(items[i]);
+        if(storage_common_is_subdir(storage, path_src, furi_string_get_cstr(dir_dst))) {
+            // Destination is the source folder itself or one of its descendants
+            fail_desc = "folder into itself";
+        } else {
+            path_extract_basename(path_src, base);
+            path_concat(furi_string_get_cstr(dir_dst), furi_string_get_cstr(base), path_dst);
+            FS_Error error =
+                archive_copy_rename_file_or_dir(browser, path_src, path_dst, copy, true);
+            if(error == FSE_OK) {
+                done++;
+                furi_string_set(path_done, path_dst);
+            } else {
+                fail_desc = storage_error_get_desc(error);
+            }
+        }
+        furi_string_free(items[i]);
+    }
+    free(items);
+    furi_record_close(RECORD_STORAGE);
+
+    archive_show_loading_popup(archive, false);
+
+    if(done < count) {
+        FuriString* dialog_msg = furi_string_alloc();
+        if(count == 1) {
+            furi_string_printf(dialog_msg, "Cannot %s:\n%s", copy ? "copy" : "move", fail_desc);
+        } else {
+            furi_string_printf(
+                dialog_msg,
+                "%s %u of %u:\n%s",
+                copy ? "Copied" : "Moved",
+                (unsigned int)done,
+                (unsigned int)count,
+                fail_desc);
+        }
+        dialog_message_show_storage_error(archive->dialogs, furi_string_get_cstr(dialog_msg));
+        furi_string_free(dialog_msg);
+    }
+    if(done > 0) {
+        // Refresh the list with the (last) pasted item focused
+        ArchiveFile_t* current = archive_get_current_file(browser);
+        if(current != NULL) furi_string_set(current->path, path_done);
+        view_dispatcher_send_custom_event(
+            archive->view_dispatcher, ArchiveBrowserEventListRefresh);
+    }
+
+    furi_string_free(dir_dst);
+    furi_string_free(path_dst);
+    furi_string_free(path_done);
+    furi_string_free(base);
+    view_dispatcher_switch_to_view(archive->view_dispatcher, ArchiveViewBrowser);
+}
+
 void archive_scene_browser_callback(ArchiveBrowserEvent event, void* context) {
     ArchiveApp* archive = (ArchiveApp*)context;
     view_dispatcher_send_custom_event(archive->view_dispatcher, event);
@@ -335,88 +415,21 @@ bool archive_scene_browser_on_event(void* context, SceneManagerEvent event) {
         case ArchiveBrowserEventFileMenuPaste:
             archive_show_file_menu(browser, false, false);
             if(!favorites) {
-                FuriString* path_src = NULL;
-                FuriString* path_dst = NULL;
-                bool copy;
-                with_view_model(
-                    browser->view,
-                    ArchiveBrowserViewModel * model,
-                    {
-                        if(model->clipboard != NULL) {
-                            path_src = furi_string_alloc_set(model->clipboard);
-                            path_dst = furi_string_alloc();
-                            FuriString* base = furi_string_alloc();
-                            path_extract_basename(model->clipboard, base);
-                            path_concat(
-                                furi_string_get_cstr(browser->path),
-                                furi_string_get_cstr(base),
-                                path_dst);
-                            furi_string_free(base);
-                            copy = model->clipboard_copy;
-                            free(model->clipboard);
-                            model->clipboard = NULL;
-                        }
-                    },
-                    false);
-                if(path_src && path_dst) {
-                    view_dispatcher_switch_to_view(archive->view_dispatcher, ArchiveViewStack);
-                    archive_show_loading_popup(archive, true);
-                    FS_Error error = archive_copy_rename_file_or_dir(
-                        archive->browser, furi_string_get_cstr(path_src), path_dst, copy, true);
-                    archive_show_loading_popup(archive, false);
-                    if(error != FSE_OK) {
-                        FuriString* dialog_msg;
-                        dialog_msg = furi_string_alloc();
-                        furi_string_cat_printf(
-                            dialog_msg,
-                            "Cannot %s:\n%s",
-                            copy ? "copy" : "move",
-                            storage_error_get_desc(error));
-                        dialog_message_show_storage_error(
-                            archive->dialogs, furi_string_get_cstr(dialog_msg));
-                        furi_string_free(dialog_msg);
-                    } else {
-                        ArchiveFile_t* current = archive_get_current_file(archive->browser);
-                        if(current != NULL) furi_string_set(current->path, path_dst);
-                        view_dispatcher_send_custom_event(
-                            archive->view_dispatcher, ArchiveBrowserEventListRefresh);
-                    }
-                    furi_string_free(path_src);
-                    furi_string_free(path_dst);
-                    view_dispatcher_switch_to_view(archive->view_dispatcher, ArchiveViewBrowser);
-                }
+                archive_scene_browser_paste(archive);
             }
             consumed = true;
             break;
         case ArchiveBrowserEventFileMenuCut:
             archive_show_file_menu(browser, false, false);
             if(!favorites) {
-                with_view_model(
-                    browser->view,
-                    ArchiveBrowserViewModel * model,
-                    {
-                        if(model->clipboard == NULL) {
-                            model->clipboard = strdup(furi_string_get_cstr(selected->path));
-                            model->clipboard_copy = false;
-                        }
-                    },
-                    false);
+                archive_clipboard_set_current(browser, false);
             }
             consumed = true;
             break;
         case ArchiveBrowserEventFileMenuCopy:
             archive_show_file_menu(browser, false, false);
             if(!favorites) {
-                with_view_model(
-                    browser->view,
-                    ArchiveBrowserViewModel * model,
-                    {
-                        if(model->clipboard == NULL) {
-                            model->clipboard = strdup(furi_string_get_cstr(selected->path));
-                            model->clipboard_copy = true;
-                        }
-                    },
-                    false);
+                archive_clipboard_set_current(browser, true);
             }
             consumed = true;
             break;
@@ -466,6 +479,16 @@ bool archive_scene_browser_on_event(void* context, SceneManagerEvent event) {
                 scene_manager_set_scene_state(archive->scene_manager, ArchiveAppSceneDelete, 1);
                 scene_manager_next_scene(archive->scene_manager, ArchiveAppSceneDelete);
             }
+            consumed = true;
+            break;
+        case ArchiveBrowserEventCopySelected:
+            archive_show_file_menu(browser, false, false);
+            archive_clipboard_set_selected(browser, true);
+            consumed = true;
+            break;
+        case ArchiveBrowserEventCutSelected:
+            archive_show_file_menu(browser, false, false);
+            archive_clipboard_set_selected(browser, false);
             consumed = true;
             break;
         case ArchiveBrowserEventEnterDir:

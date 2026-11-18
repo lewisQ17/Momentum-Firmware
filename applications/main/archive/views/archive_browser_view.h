@@ -77,6 +77,8 @@ typedef enum {
     ArchiveBrowserEventExitSelect,
     ArchiveBrowserEventToggleSelect,
     ArchiveBrowserEventDeleteSelected,
+    ArchiveBrowserEventCopySelected,
+    ArchiveBrowserEventCutSelected,
 
     ArchiveBrowserEventExit,
 } ArchiveBrowserEvent;
@@ -116,7 +118,11 @@ typedef struct {
     bool menu;
     bool menu_manage;
     bool menu_can_switch;
-    char* clipboard;
+    // Clipboard: heap list of owned absolute paths, only allocated while a
+    // Copy/Cut is pending (NULL otherwise). One entry for a single-file Copy/Cut,
+    // up to ARCHIVE_SELECT_MAX when filled from a multi-selection.
+    FuriString** clipboard;
+    size_t clipboard_count;
     bool clipboard_copy;
     menu_array_t context_menu;
 

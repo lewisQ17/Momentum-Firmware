@@ -137,6 +137,14 @@ static void render_item_menu(Canvas* canvas, ArchiveBrowserViewModel* model) {
             if(model->selected_count > 0) {
                 archive_menu_add_item(
                     menu_array_push_raw(model->context_menu),
+                    "Copy Sel.",
+                    ArchiveBrowserEventCopySelected);
+                archive_menu_add_item(
+                    menu_array_push_raw(model->context_menu),
+                    "Cut Sel.",
+                    ArchiveBrowserEventCutSelected);
+                archive_menu_add_item(
+                    menu_array_push_raw(model->context_menu),
                     "Delete Sel.",
                     ArchiveBrowserEventDeleteSelected);
             }
@@ -236,8 +244,14 @@ static void render_item_menu(Canvas* canvas, ArchiveBrowserViewModel* model) {
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_rframe(canvas, 71, 2, 57, calc_height + 4, 3);
 
-    canvas_draw_str_aligned(
-        canvas, 100, 11, AlignCenter, AlignBottom, model->menu_manage ? "Manage:" : "Actions:");
+    char menu_title[16];
+    if(model->select_mode) {
+        // Batch menu: show how many items the actions below apply to
+        snprintf(menu_title, sizeof(menu_title), "Sel: %u", (unsigned int)model->selected_count);
+    } else {
+        strlcpy(menu_title, model->menu_manage ? "Manage:" : "Actions:", sizeof(menu_title));
+    }
+    canvas_draw_str_aligned(canvas, 100, 11, AlignCenter, AlignBottom, menu_title);
     if(model->menu_can_switch) {
         if(model->menu_manage) {
             canvas_draw_icon(canvas, 74, 4, &I_ButtonLeft_4x7);
@@ -413,12 +427,32 @@ static void archive_render_status_bar(Canvas* canvas, ArchiveBrowserViewModel* m
         archive_update_formatted_path(model);
     }
     bool clip = model->clipboard != NULL;
+    // Clipboard badge: right edge is fixed at x=93, a multi-file clipboard also
+    // shows its item count so the badge grows to the left (never past x=53)
+    char clip_str[16] = "";
+    uint8_t clip_x = 69;
+    if(clip) {
+        const char* clip_verb = model->clipboard_copy ? "Copy" : "Cut";
+        if(model->clipboard_count > 1) {
+            snprintf(
+                clip_str,
+                sizeof(clip_str),
+                "%s %u",
+                clip_verb,
+                (unsigned int)model->clipboard_count);
+            uint32_t clip_px = canvas_string_width(canvas, clip_str) + 6u;
+            clip_x = 94 - MIN(MAX(clip_px, 25u), 41u);
+        } else {
+            strlcpy(clip_str, clip_verb, sizeof(clip_str));
+        }
+    }
+    const uint8_t clip_w = 94 - clip_x;
 
     canvas_draw_icon(canvas, 0, 0, &I_Background_128x11);
 
     canvas_set_color(canvas, ColorWhite);
     canvas_draw_box(canvas, 0, 0, 50, 13);
-    if(clip) canvas_draw_box(canvas, 69, 0, 24, 13);
+    if(clip) canvas_draw_box(canvas, clip_x, 0, clip_w - 1, 13);
     canvas_draw_box(canvas, 107, 0, 20, 13);
 
     canvas_set_color(canvas, ColorBlack);
@@ -440,11 +474,11 @@ static void archive_render_status_bar(Canvas* canvas, ArchiveBrowserViewModel* m
     }
 
     if(clip) {
-        canvas_draw_rframe(canvas, 69, 0, 25, 13, 1);
+        canvas_draw_rframe(canvas, clip_x, 0, clip_w, 13, 1);
         canvas_draw_line(canvas, 92, 1, 92, 11);
-        canvas_draw_line(canvas, 70, 11, 92, 11);
+        canvas_draw_line(canvas, clip_x + 1, 11, 92, 11);
         canvas_draw_str_aligned(
-            canvas, 81, 9, AlignCenter, AlignBottom, model->clipboard_copy ? "Copy" : "Cut");
+            canvas, clip_x + clip_w / 2, 9, AlignCenter, AlignBottom, clip_str);
     }
 
     canvas_draw_rframe(canvas, 107, 0, 21, 13, 1);
@@ -781,11 +815,8 @@ void browser_free(ArchiveBrowserView* browser) {
         browser->view,
         ArchiveBrowserViewModel * model,
         {
-            for(size_t i = 0; i < model->selected_count; i++) {
-                furi_string_free(model->selected_files[i]);
-                model->selected_files[i] = NULL;
-            }
-            model->selected_count = 0;
+            archive_selection_free(model);
+            archive_clipboard_free(model);
             files_array_clear(model->files);
             menu_array_clear(model->context_menu);
         },

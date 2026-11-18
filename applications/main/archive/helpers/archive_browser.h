@@ -96,6 +96,14 @@ void archive_selection_toggle_current(ArchiveBrowserView* browser);
 size_t archive_get_selected_count(ArchiveBrowserView* browser);
 void archive_delete_selected(ArchiveBrowserView* browser);
 
+// Model-level helpers, call with the view model locked
+void archive_selection_free(ArchiveBrowserViewModel* model);
+void archive_clipboard_free(ArchiveBrowserViewModel* model);
+
+void archive_clipboard_set_current(ArchiveBrowserView* browser, bool copy);
+bool archive_clipboard_set_selected(ArchiveBrowserView* browser, bool copy);
+FuriString** archive_clipboard_take(ArchiveBrowserView* browser, size_t* count, bool* copy);
+
 void archive_set_tab(ArchiveBrowserView* browser, ArchiveTabEnum tab);
 void archive_switch_tab(ArchiveBrowserView* browser, InputKey key);
 void archive_enter_dir(ArchiveBrowserView* browser, FuriString* name);

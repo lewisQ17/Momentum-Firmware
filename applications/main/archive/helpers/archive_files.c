@@ -188,7 +188,8 @@ FS_Error archive_copy_rename_file_or_dir(
     }
     furi_record_close(RECORD_STORAGE);
 
-    if(!copy && archive_is_favorite("%s", src_path)) {
+    // Only follow the file in favorites when it was actually moved
+    if(error == FSE_OK && !copy && archive_is_favorite("%s", src_path)) {
         archive_favorites_rename(src_path, furi_string_get_cstr(dst_path));
     }
 

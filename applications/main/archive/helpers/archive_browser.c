@@ -454,11 +454,15 @@ void archive_set_tab(ArchiveBrowserView* browser, ArchiveTabEnum tab) {
         browser->view,
         ArchiveBrowserViewModel * model,
         {
+            if(model->tab_idx != tab) {
+                // A selection belongs to the folder it was made in, never carry
+                // it (or select mode) over to another tab
+                archive_selection_free(model);
+                model->select_mode = false;
+            }
             model->tab_idx = tab;
-            if(!memcmp(archive_get_default_path(tab), "/app:", strlen("/app:")) &&
-               model->clipboard != NULL) {
-                free(model->clipboard);
-                model->clipboard = NULL;
+            if(!memcmp(archive_get_default_path(tab), "/app:", strlen("/app:"))) {
+                archive_clipboard_free(model);
             }
         },
         false);
@@ -571,6 +575,29 @@ void archive_favorites_move_mode(ArchiveBrowserView* browser, bool active) {
         browser->view, ArchiveBrowserViewModel * model, { model->move_fav = active; }, true);
 }
 
+void archive_selection_free(ArchiveBrowserViewModel* model) {
+    furi_assert(model);
+
+    for(size_t i = 0; i < model->selected_count; i++) {
+        furi_string_free(model->selected_files[i]);
+        model->selected_files[i] = NULL;
+    }
+    model->selected_count = 0;
+}
+
+void archive_clipboard_free(ArchiveBrowserViewModel* model) {
+    furi_assert(model);
+
+    if(model->clipboard != NULL) {
+        for(size_t i = 0; i < model->clipboard_count; i++) {
+            furi_string_free(model->clipboard[i]);
+        }
+        free(model->clipboard);
+        model->clipboard = NULL;
+    }
+    model->clipboard_count = 0;
+}
+
 void archive_set_select_mode(ArchiveBrowserView* browser, bool active) {
     furi_assert(browser);
 
@@ -580,11 +607,7 @@ void archive_set_select_mode(ArchiveBrowserView* browser, bool active) {
         {
             // Leaving select mode always frees the pending selection
             if(!active) {
-                for(size_t i = 0; i < model->selected_count; i++) {
-                    furi_string_free(model->selected_files[i]);
-                    model->selected_files[i] = NULL;
-                }
-                model->selected_count = 0;
+                archive_selection_free(model);
             }
             model->select_mode = active;
         },
@@ -604,16 +627,7 @@ void archive_selection_clear(ArchiveBrowserView* browser) {
     furi_assert(browser);
 
     with_view_model(
-        browser->view,
-        ArchiveBrowserViewModel * model,
-        {
-            for(size_t i = 0; i < model->selected_count; i++) {
-                furi_string_free(model->selected_files[i]);
-                model->selected_files[i] = NULL;
-            }
-            model->selected_count = 0;
-        },
-        true);
+        browser->view, ArchiveBrowserViewModel * model, { archive_selection_free(model); }, true);
 }
 
 size_t archive_get_selected_count(ArchiveBrowserView* browser) {
@@ -710,6 +724,77 @@ void archive_delete_selected(ArchiveBrowserView* browser) {
     }
 
     furi_record_close(RECORD_STORAGE);
+}
+
+void archive_clipboard_set_current(ArchiveBrowserView* browser, bool copy) {
+    furi_assert(browser);
+
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            // Same rule as before: a pending clipboard is never overwritten by a
+            // single-file Copy/Cut (the menu offers Paste instead)
+            if(model->clipboard == NULL && archive_is_item_in_array(model, model->item_idx)) {
+                ArchiveFile_t* current =
+                    files_array_get(model->files, model->item_idx - model->array_offset);
+                model->clipboard = malloc(sizeof(FuriString*));
+                model->clipboard[0] = furi_string_alloc_set(current->path);
+                model->clipboard_count = 1;
+                model->clipboard_copy = copy;
+            }
+        },
+        true);
+}
+
+bool archive_clipboard_set_selected(ArchiveBrowserView* browser, bool copy) {
+    furi_assert(browser);
+
+    bool set = false;
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            if(model->selected_count > 0) {
+                // Hand the selected paths over to the clipboard (no copies), any
+                // older pending clipboard is replaced. Select mode ends here so the
+                // user can navigate to the destination folder and Paste.
+                archive_clipboard_free(model);
+                model->clipboard = malloc(sizeof(FuriString*) * model->selected_count);
+                for(size_t i = 0; i < model->selected_count; i++) {
+                    model->clipboard[i] = model->selected_files[i];
+                    model->selected_files[i] = NULL;
+                }
+                model->clipboard_count = model->selected_count;
+                model->clipboard_copy = copy;
+                model->selected_count = 0;
+                model->select_mode = false;
+                set = true;
+            }
+        },
+        true);
+    return set;
+}
+
+FuriString** archive_clipboard_take(ArchiveBrowserView* browser, size_t* count, bool* copy) {
+    furi_assert(browser);
+    furi_assert(count);
+    furi_assert(copy);
+
+    FuriString** items = NULL;
+    with_view_model(
+        browser->view,
+        ArchiveBrowserViewModel * model,
+        {
+            // Ownership of the list and its strings moves to the caller
+            items = model->clipboard;
+            *count = items ? model->clipboard_count : 0;
+            *copy = model->clipboard_copy;
+            model->clipboard = NULL;
+            model->clipboard_count = 0;
+        },
+        true);
+    return items;
 }
 
 static bool archive_is_dir_exists(FuriString* path) {
