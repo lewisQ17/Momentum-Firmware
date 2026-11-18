@@ -8,6 +8,7 @@
 char* beaufort_cipher_encrypt_and_decrypt(const char* text, const char* key) {
     int len = strlen(text);
     int key_len = strlen(key);
+    if (key_len == 0) return "key is empty";
     int key_index = 0;
 
     char* result = malloc(len + 1);

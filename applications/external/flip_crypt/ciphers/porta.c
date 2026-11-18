@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,15 @@ char* porta_encrypt_and_decrypt(const char* plaintext, const char* keyword) {
     size_t n = strlen(plaintext);
     size_t klen = strlen(keyword);
 
+    // the key needs at least one letter, otherwise there is nothing to cycle through
+    bool key_has_letter = false;
+    for (size_t k = 0; k < klen; k++) {
+        if (number_to_index(keyword[k]) >= 0) {
+            key_has_letter = true;
+            break;
+        }
+    }
+
     char* output = malloc(n + 1);
     if (!output) return "memory allocation failed, try again";
 
@@ -40,6 +50,10 @@ char* porta_encrypt_and_decrypt(const char* plaintext, const char* keyword) {
         int p_index = number_to_index(p);
 
         if (p_index >= 0) {
+            if (!key_has_letter) {
+                free(output);
+                return "key needs at least one letter";
+            }
             // pull next alphabetic key character
             int k_index;
             do {

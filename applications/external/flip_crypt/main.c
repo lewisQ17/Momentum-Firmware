@@ -1970,9 +1970,9 @@ void dialog_cipher_output_scene_on_enter(void* context) {
                 memcpy(rc4_decrypted_str, rc4_decrypted, rc4_encrypted_len);
                 rc4_decrypted_str[rc4_encrypted_len] = '\0';
                 dialog_ex_set_text(app->dialog_ex, rc4_decrypted_str, 64, 18, AlignCenter, AlignCenter);
-                free(rc4_decrypted_str);
             }
             save_result_generic(APP_DATA_PATH("rc4_decrypt.txt"), rc4_decrypted_str);
+            free(rc4_decrypted_str);
             app->last_output_scene = "RC4Decrypt";
             dialog_ex_set_left_button_text(app->dialog_ex, "NFC");
             dialog_ex_set_center_button_text(app->dialog_ex, "Save");

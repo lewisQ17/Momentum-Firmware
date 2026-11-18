@@ -8,6 +8,7 @@
 char* vigenere_encrypt(const char* text, const char* key) {
     int len = strlen(text);
     int key_len = strlen(key);
+    if (key_len == 0) return "key is empty";
     int key_index = 0;
 
     char* ciphertext = malloc(len + 1);
@@ -39,6 +40,7 @@ char* vigenere_encrypt(const char* text, const char* key) {
 char* vigenere_decrypt(const char* text, const char* key) {
     int len = strlen(text);
     int key_len = strlen(key);
+    if (key_len == 0) return "key is empty";
     int key_index = 0;
 
     char* plaintext = malloc(len + 1);
