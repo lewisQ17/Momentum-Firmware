@@ -169,6 +169,12 @@ static void rpc_system_system_set_datetime_process(const PB_Main* request, void*
     datetime.month = request->content.system_set_datetime_request.datetime.month;
     datetime.year = request->content.system_set_datetime_request.datetime.year;
     datetime.weekday = request->content.system_set_datetime_request.datetime.weekday;
+    // Remote-supplied: an out of range month/day would later break timestamp math
+    if(!datetime_validate_datetime(&datetime)) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
     furi_hal_rtc_set_datetime(&datetime);
 
     rpc_send_and_release_empty(session, request->command_id, PB_CommandStatus_OK);

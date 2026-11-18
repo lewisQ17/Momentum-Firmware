@@ -26,31 +26,37 @@ static const GpioPin* rpc_pin_to_hal_pin(PB_Gpio_GpioPin rpc_pin) {
         return &gpio_ext_pa7;
     }
 
-    __builtin_unreachable();
+    // nanopb does not range-check enums, the value comes from the remote side
+    return NULL;
 }
 
-static GpioMode rpc_mode_to_hal_mode(PB_Gpio_GpioPinMode rpc_mode) {
+static bool rpc_mode_to_hal_mode(PB_Gpio_GpioPinMode rpc_mode, GpioMode* mode) {
     switch(rpc_mode) {
     case PB_Gpio_GpioPinMode_OUTPUT:
-        return GpioModeOutputPushPull;
+        *mode = GpioModeOutputPushPull;
+        return true;
     case PB_Gpio_GpioPinMode_INPUT:
-        return GpioModeInput;
+        *mode = GpioModeInput;
+        return true;
     }
 
-    __builtin_unreachable();
+    return false;
 }
 
-static GpioPull rpc_pull_mode_to_hall_pull_mode(PB_Gpio_GpioInputPull pull_mode) {
-    switch(pull_mode) {
+static bool rpc_pull_mode_to_hall_pull_mode(PB_Gpio_GpioInputPull rpc_pull, GpioPull* pull) {
+    switch(rpc_pull) {
     case PB_Gpio_GpioInputPull_UP:
-        return GpioPullUp;
+        *pull = GpioPullUp;
+        return true;
     case PB_Gpio_GpioInputPull_DOWN:
-        return GpioPullDown;
+        *pull = GpioPullDown;
+        return true;
     case PB_Gpio_GpioInputPull_NO:
-        return GpioPullNo;
+        *pull = GpioPullNo;
+        return true;
     }
 
-    __builtin_unreachable();
+    return false;
 }
 
 static void rpc_system_gpio_set_pin_mode(const PB_Main* request, void* context) {
@@ -62,7 +68,12 @@ static void rpc_system_gpio_set_pin_mode(const PB_Main* request, void* context) 
 
     PB_Gpio_SetPinMode cmd = request->content.gpio_set_pin_mode;
     const GpioPin* pin = rpc_pin_to_hal_pin(cmd.pin);
-    GpioMode mode = rpc_mode_to_hal_mode(cmd.mode);
+    GpioMode mode;
+    if(!pin || !rpc_mode_to_hal_mode(cmd.mode, &mode)) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
 
     furi_hal_gpio_init_simple(pin, mode);
     if(mode == GpioModeOutputPushPull) {
@@ -81,6 +92,11 @@ static void rpc_system_gpio_write_pin(const PB_Main* request, void* context) {
 
     PB_Gpio_WritePin cmd = request->content.gpio_write_pin;
     const GpioPin* pin = rpc_pin_to_hal_pin(cmd.pin);
+    if(!pin) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
     uint8_t value = !!(cmd.value);
 
     PB_Main* response = malloc(sizeof(PB_Main));
@@ -108,6 +124,11 @@ static void rpc_system_gpio_read_pin(const PB_Main* request, void* context) {
 
     PB_Gpio_ReadPin cmd = request->content.gpio_read_pin;
     const GpioPin* pin = rpc_pin_to_hal_pin(cmd.pin);
+    if(!pin) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
 
     PB_Main* response = malloc(sizeof(PB_Main));
     response->command_id = request->command_id;
@@ -135,6 +156,11 @@ void rpc_system_gpio_get_pin_mode(const PB_Main* request, void* context) {
 
     PB_Gpio_GetPinMode cmd = request->content.gpio_get_pin_mode;
     const GpioPin* pin = rpc_pin_to_hal_pin(cmd.pin);
+    if(!pin) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
 
     PB_Main* response = malloc(sizeof(PB_Main));
     response->command_id = request->command_id;
@@ -171,7 +197,12 @@ void rpc_system_gpio_set_input_pull(const PB_Main* request, void* context) {
 
     PB_Gpio_SetInputPull cmd = request->content.gpio_set_input_pull;
     const GpioPin* pin = rpc_pin_to_hal_pin(cmd.pin);
-    const GpioPull pull_mode = rpc_pull_mode_to_hall_pull_mode(cmd.pull_mode);
+    GpioPull pull_mode;
+    if(!pin || !rpc_pull_mode_to_hall_pull_mode(cmd.pull_mode, &pull_mode)) {
+        rpc_send_and_release_empty(
+            session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+        return;
+    }
 
     PB_Main* response = malloc(sizeof(PB_Main));
     response->command_id = request->command_id;

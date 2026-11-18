@@ -359,10 +359,21 @@ static void rpc_system_gui_start_virtual_display_process(const PB_Main* request,
     // Using display framebuffer size as an XBM buffer size is like comparing apples and oranges
     // Glad they both are 1024 for now
     size_t buffer_size = canvas_get_buffer_size(rpc_gui->gui->canvas);
+
+    // The frame is remote-supplied: it must hold a full screen worth of data
+    if(request->content.gui_start_virtual_display_request.has_first_frame) {
+        const pb_bytes_array_t* frame_data =
+            request->content.gui_start_virtual_display_request.first_frame.data;
+        if(!frame_data || frame_data->size < buffer_size) {
+            rpc_send_and_release_empty(
+                session, request->command_id, PB_CommandStatus_ERROR_INVALID_PARAMETERS);
+            return;
+        }
+    }
+
     rpc_gui->virtual_display_buffer = malloc(buffer_size);
 
     if(request->content.gui_start_virtual_display_request.has_first_frame) {
-        size_t buffer_size = canvas_get_buffer_size(rpc_gui->gui->canvas);
         memcpy(
             rpc_gui->virtual_display_buffer,
             request->content.gui_start_virtual_display_request.first_frame.data->bytes,
@@ -430,10 +441,12 @@ static void rpc_system_gui_virtual_display_frame_process(const PB_Main* request,
     }
 
     size_t buffer_size = canvas_get_buffer_size(rpc_gui->gui->canvas);
-    memcpy(
-        rpc_gui->virtual_display_buffer,
-        request->content.gui_screen_frame.data->bytes,
-        buffer_size);
+    const pb_bytes_array_t* frame_data = request->content.gui_screen_frame.data;
+    if(!frame_data || frame_data->size < buffer_size) {
+        FURI_LOG_W(TAG, "Virtual display frame is too short, ignoring it");
+        return;
+    }
+    memcpy(rpc_gui->virtual_display_buffer, frame_data->bytes, buffer_size);
     rpc_gui->virtual_display_not_empty = true;
     view_port_update(rpc_gui->virtual_display_view_port);
 
