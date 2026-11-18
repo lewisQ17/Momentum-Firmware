@@ -44,7 +44,8 @@ uint8_t* protocol_pac_stanley_get_data(ProtocolPACStanley* protocol) {
 }
 
 static void protocol_pac_stanley_decode(ProtocolPACStanley* protocol) {
-    uint8_t asciiCardId[8];
+    // hex_chars_to_uint8() parses up to a NUL terminator
+    uint8_t asciiCardId[8 + 1] = {0};
     for(size_t idx = 0; idx < 8; idx++) {
         uint8_t byte = bit_lib_reverse_8_fast(bit_lib_get_bits(
             protocol->encoded_data,

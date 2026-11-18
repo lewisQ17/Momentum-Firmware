@@ -3,8 +3,10 @@
 #include <toolbox/stream/file_stream.h>
 #include <toolbox/varint.h>
 
-#define LFRFID_RAW_FILE_MAGIC   0x4C464952
-#define LFRFID_RAW_FILE_VERSION 1
+#define LFRFID_RAW_FILE_MAGIC           0x4C464952
+#define LFRFID_RAW_FILE_VERSION         1
+// Upper bound for the block buffer size taken from a file header
+#define LFRFID_RAW_FILE_MAX_BUFFER_SIZE 8192
 
 #define TAG "LfRfidRawFile"
 
@@ -98,6 +100,13 @@ bool lfrfid_raw_file_read_header(LFRFIDRawFile* file, float* frequency, float* d
     size_t size = stream_read(file->stream, (uint8_t*)&header, sizeof(LFRFIDRawFileHeader));
     if(size == sizeof(LFRFIDRawFileHeader)) {
         if(header.magic == LFRFID_RAW_FILE_MAGIC && header.version == LFRFID_RAW_FILE_VERSION) {
+            // File-supplied allocation size, the writer uses 2048
+            if(header.max_buffer_size == 0 ||
+               header.max_buffer_size > LFRFID_RAW_FILE_MAX_BUFFER_SIZE) {
+                FURI_LOG_E(TAG, "read header: bad buffer size");
+                return false;
+            }
+            if(file->buffer) free(file->buffer);
             *frequency = header.frequency;
             *duty_cycle = header.duty_cycle;
             file->max_buffer_size = header.max_buffer_size;

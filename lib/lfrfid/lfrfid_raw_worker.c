@@ -298,9 +298,9 @@ static int32_t lfrfid_raw_emulate_worker_thread(void* thread_context) {
                         &data->emulate_buffer_ccr[start + i],
                         NULL);
                     if(!file_valid) break;
-                    data->emulate_buffer_arr[i] /= 8;
-                    data->emulate_buffer_arr[i] -= 1;
-                    data->emulate_buffer_ccr[i] /= 8;
+                    data->emulate_buffer_arr[start + i] /= 8;
+                    data->emulate_buffer_arr[start + i] -= 1;
+                    data->emulate_buffer_ccr[start + i] /= 8;
                 }
             } else if(size != 0) {
                 data->ctx.overrun_count++;
