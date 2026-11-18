@@ -42,11 +42,13 @@ StrintParseError strint_to_uint64_internal(
 
     // infer base
     // not assigning directly to `base' to permit prefixes with explicit bases
+    // A prefix only counts when it matches the explicit base: "0B12" in base 16
+    // is the hex number B12, not a binary prefix followed by "12"
     uint8_t inferred_base = 0;
-    if(strncasecmp(str, "0x", 2) == 0) {
+    if((base == 0 || base == 16) && strncasecmp(str, "0x", 2) == 0) {
         inferred_base = 16;
         str += 2;
-    } else if(strncasecmp(str, "0b", 2) == 0) {
+    } else if((base == 0 || base == 2) && strncasecmp(str, "0b", 2) == 0) {
         inferred_base = 2;
         str += 2;
     } else if(*str == '0') {

@@ -50,6 +50,9 @@ StrintParseError strint_to_int64(const char* str, char** end, int64_t* out, uint
  *   - If it starts with `0b`, it's read in base 2.
  *   - Otherwise, it's read in base 10.
  *
+ * With an explicit base, a `0x` prefix is only accepted for base 16 and a `0b`
+ * prefix only for base 2 (`0B12` in base 16 is the hex number `B12`).
+ *
  * For a description of the return codes, see `StrintParseError`. If the return
  * code is something other than `StrintParseNoError`, the values at `end` and
  * `out` are unaltered.

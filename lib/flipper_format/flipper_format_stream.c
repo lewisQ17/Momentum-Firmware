@@ -31,7 +31,10 @@ bool flipper_format_stream_write_eol(Stream* stream) {
     return flipper_format_stream_write(stream, &flipper_format_eoln, 1);
 }
 
-static bool flipper_format_stream_read_valid_key(Stream* stream, FuriString* key) {
+// key_size_limit: stop accumulating once the key is this long. A line without a
+// delimiter (binary or foreign file) would otherwise grow the key up to the file size.
+static bool
+    flipper_format_stream_read_valid_key(Stream* stream, FuriString* key, size_t key_size_limit) {
     furi_string_reset(key);
     const size_t buffer_size = 32;
     uint8_t buffer[buffer_size];
@@ -85,7 +88,7 @@ static bool flipper_format_stream_read_valid_key(Stream* stream, FuriString* key
             } else {
                 // just new symbol, reset the new_line flag
                 new_line = false;
-                if(accumulate) {
+                if(accumulate && furi_string_size(key) < key_size_limit) {
                     // and accumulate data if we want
                     furi_string_push_back(key, data);
                 }
@@ -103,9 +106,11 @@ bool flipper_format_stream_seek_to_key(Stream* stream, const char* key, bool str
     FuriString* read_key;
 
     read_key = furi_string_alloc();
+    // One character more than the wanted key is enough to tell a longer key apart
+    const size_t key_size_limit = strlen(key) + 1;
 
     while(!stream_eof(stream)) {
-        if(flipper_format_stream_read_valid_key(stream, read_key)) {
+        if(flipper_format_stream_read_valid_key(stream, read_key, key_size_limit)) {
             if(furi_string_cmp_str(read_key, key) == 0) {
                 if(!stream_seek(stream, 2, StreamOffsetFromCurrent)) break;
 
