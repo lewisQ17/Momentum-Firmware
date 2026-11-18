@@ -1,4 +1,5 @@
 #include "../usb_uart_bridge.h"
+#include "../usb_uart_settings.h"
 #include "../gpio_app_i.h"
 #include <furi_hal.h>
 
@@ -19,20 +20,6 @@ static const char* const vcp_ch[] = {"0 (CLI)", "1"};
 static const char* const uart_ch[] = {"13,14", "15,16"};
 static const char* const flow_pins[] = {"None", "2,3", "6,7", "16,15"};
 static const char* const baudrate_mode[] = {"Host"};
-static const uint32_t baudrate_list[] = {
-    1200,
-    2400,
-    4800,
-    9600,
-    19200,
-    28800,
-    38400,
-    57600,
-    115200,
-    230400,
-    460800,
-    921600,
-};
 static const char* const software_de_re[] = {"None", "4"};
 static const char* const framing_src[UsbUartFramingSrcCount] = {"Menu", "Host"};
 static const char* const data_bits[UsbUartDataBitsCount] = {"8", "7", "6"};
@@ -40,6 +27,10 @@ static const char* const parity[UsbUartParityCount] = {"None", "Even", "Odd"};
 static const char* const stop_bits[UsbUartStopBitsCount] = {"1", "2", "1.5", "0.5"};
 static const char* const flow_invert[] = {"None", "RTS", "DTR", "Both"};
 _Static_assert(COUNT_OF(flow_invert) == UsbUartFlowInvertBoth + 1, "flow_invert labels");
+// The settings loader range-checks stored values against these counts
+_Static_assert(COUNT_OF(vcp_ch) == USB_UART_VCP_CH_COUNT, "vcp_ch labels");
+_Static_assert(COUNT_OF(flow_pins) == USB_UART_FLOW_PINS_COUNT, "flow_pins labels");
+_Static_assert(COUNT_OF(software_de_re) == USB_UART_DE_RE_COUNT, "software_de_re labels");
 
 bool gpio_scene_usb_uart_cfg_on_event(void* context, SceneManagerEvent event) {
     GpioApp* app = context;
@@ -58,7 +49,9 @@ void line_ensure_flow_invariant(GpioApp* app) {
     // selected. This function enforces that invariant by resetting flow_pins
     // to None if it is configured to 16,15 when LPUART is selected.
 
-    uint8_t available_flow_pins = app->usb_uart_cfg->uart_ch == FuriHalSerialIdLpuart ? 3 : 4;
+    uint8_t available_flow_pins = app->usb_uart_cfg->uart_ch == FuriHalSerialIdLpuart ?
+                                      USB_UART_FLOW_PINS_LPUART_COUNT :
+                                      USB_UART_FLOW_PINS_COUNT;
     VariableItem* item = app->var_item_flow;
     variable_item_set_values_count(item, available_flow_pins);
 
@@ -212,9 +205,9 @@ static void line_baudrate_cb(VariableItem* item) {
     char br_text[8];
 
     if(index > 0) {
-        snprintf(br_text, 7, "%lu", baudrate_list[index - 1]);
+        snprintf(br_text, 7, "%lu", usb_uart_baudrate_list[index - 1]);
         variable_item_set_current_value_text(item, br_text);
-        app->usb_uart_cfg->baudrate = baudrate_list[index - 1];
+        app->usb_uart_cfg->baudrate = usb_uart_baudrate_list[index - 1];
     } else {
         variable_item_set_current_value_text(item, baudrate_mode[index]);
         app->usb_uart_cfg->baudrate = 0;
@@ -248,14 +241,10 @@ void gpio_scene_usb_uart_cfg_on_enter(void* context) {
     variable_item_set_current_value_text(item, vcp_ch[app->usb_uart_cfg->vcp_ch]);
 
     item = variable_item_list_add(
-        var_item_list,
-        "Baudrate",
-        sizeof(baudrate_list) / sizeof(baudrate_list[0]) + 1,
-        line_baudrate_cb,
-        app);
+        var_item_list, "Baudrate", USB_UART_BAUDRATE_COUNT + 1, line_baudrate_cb, app);
     variable_item_set_current_value_index(item, app->usb_uart_cfg->baudrate_mode);
     if(app->usb_uart_cfg->baudrate_mode > 0) {
-        snprintf(br_text, 7, "%lu", baudrate_list[app->usb_uart_cfg->baudrate_mode - 1]);
+        snprintf(br_text, 7, "%lu", usb_uart_baudrate_list[app->usb_uart_cfg->baudrate_mode - 1]);
         variable_item_set_current_value_text(item, br_text);
     } else {
         variable_item_set_current_value_text(
@@ -314,5 +303,8 @@ void gpio_scene_usb_uart_cfg_on_exit(void* context) {
         GpioAppViewUsbUartCfg,
         variable_item_list_get_selected_item_index(app->var_item_list));
     variable_item_list_reset(app->var_item_list);
+    // Persist once per visit instead of on every left/right press; only
+    // writes when something actually changed
+    usb_uart_settings_save(app->usb_uart_cfg);
     free(app->usb_uart_cfg);
 }

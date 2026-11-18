@@ -1,5 +1,6 @@
 #include "../gpio_app_i.h"
 #include "../usb_uart_bridge.h"
+#include "../usb_uart_settings.h"
 
 typedef struct {
     UsbUartConfig cfg;
@@ -17,6 +18,11 @@ void gpio_scene_usb_uart_callback(GpioCustomEvent event, void* context) {
 void gpio_scene_usb_uart_dialog_callback(DialogExResult result, void* context) {
     GpioApp* app = context;
     if(result == DialogExResultLeft) {
+        // Normally already saved when the config menu was left, this only
+        // writes if the bridge config differs from the stored one
+        UsbUartConfig cfg;
+        usb_uart_get_config(app->usb_uart_bridge, &cfg);
+        usb_uart_settings_save(&cfg);
         usb_uart_disable(app->usb_uart_bridge);
         free(scene_usb_uart);
         scene_usb_uart = NULL;
@@ -30,9 +36,11 @@ void gpio_scene_usb_uart_on_enter(void* context) {
     GpioApp* app = context;
     if(!scene_usb_uart) {
         scene_usb_uart = malloc(sizeof(SceneUsbUartBridge));
-        // All-zero config = VCP 0, USART, no flow pins, host baudrate, no DE/RE,
-        // 8N1 framing from the menu and no RTS/DTR inversion
         memset(scene_usb_uart, 0, sizeof(SceneUsbUartBridge));
+        // Start with the saved config. Without a settings file this is the
+        // all-zero config = VCP 0, USART, no flow pins, host baudrate, no DE/RE,
+        // 8N1 framing from the menu and no RTS/DTR inversion
+        usb_uart_settings_load(&scene_usb_uart->cfg);
         app->usb_uart_bridge = usb_uart_enable(&scene_usb_uart->cfg);
     }
 
