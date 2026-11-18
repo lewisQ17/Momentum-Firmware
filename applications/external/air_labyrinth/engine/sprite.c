@@ -9,6 +9,8 @@
 #define SPRITE_E(...)
 #endif
 
+#define SPRITE_MAX_FILE_SIZE 4096
+
 struct Sprite {
     uint32_t width;
     uint32_t height;
@@ -32,9 +34,25 @@ Sprite* sprite_alloc(const char* path) {
             break;
         }
 
+        // the size comes from the file: it has to cover the header and stay sane
+        if(size < sizeof(Sprite) || size > SPRITE_MAX_FILE_SIZE) {
+            SPRITE_E("Invalid sprite size: %s", path);
+            break;
+        }
+
         sprite = malloc(size);
         if(storage_file_read(file, sprite, size) != size) {
             SPRITE_E("Failed to read file: %s", path);
+            free(sprite);
+            sprite = NULL;
+            break;
+        }
+
+        // the bitmap rows are byte aligned and have to fit in what was read
+        if(sprite->width == 0 || sprite->height == 0 || sprite->width > 128 ||
+           sprite->height > 64 ||
+           (size_t)((sprite->width + 7) / 8) * sprite->height > size - sizeof(Sprite)) {
+            SPRITE_E("Invalid sprite dimensions: %s", path);
             free(sprite);
             sprite = NULL;
             break;
@@ -45,6 +63,7 @@ Sprite* sprite_alloc(const char* path) {
     } while(false);
 
     storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
 
     return sprite;
 }
