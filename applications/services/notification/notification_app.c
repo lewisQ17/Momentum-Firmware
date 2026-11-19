@@ -506,6 +506,12 @@ static NotificationApp* notification_app_alloc(void) {
 
     app->settings.version = NOTIFICATION_SETTINGS_VERSION;
 
+    // The struct is malloc'd, not zeroed. The backlight comes on at boot (the
+    // message below), so start the tracked state as on — otherwise the flag
+    // holds garbage until that message is processed, and a reader such as the
+    // desktop dolphin idle-render gate could sample it wrong on the first tick.
+    app->display_backlight_on = true;
+
     // display backlight control
     app->event_record = furi_record_open(RECORD_INPUT_EVENTS);
     furi_pubsub_subscribe(app->event_record, input_event_callback, app);
